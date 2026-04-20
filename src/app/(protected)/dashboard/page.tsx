@@ -8,6 +8,14 @@ export default async function DashboardPage() {
 
   if (!user) redirect("/login");
 
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+
+  if (profile?.role === "profesor") redirect("/asistencia");
+
   return (
     <main className="min-h-screen bg-gray-50">
       <nav className="border-b bg-white px-6 py-4 flex items-center justify-between">
