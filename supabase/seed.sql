@@ -60,12 +60,15 @@ VALUES
 ON CONFLICT (id) DO NOTHING;
 
 -- Grupo de test asignado al profesor
-INSERT INTO groups (id, academy_id, profesor_id, name)
+INSERT INTO groups (id, academy_id, profesor_id, name, days, time_start, time_end)
 VALUES (
   '30000000-0000-0000-0000-000000000001',
   '10000000-0000-0000-0000-000000000001',
   '20000000-0000-0000-0000-000000000002',
-  'Grupo Avanzado — Lunes'
+  'Grupo Avanzado — Lunes',
+  ARRAY['lunes'],
+  '18:00',
+  '19:30'
 ) ON CONFLICT (id) DO NOTHING;
 
 -- Alumnos de test

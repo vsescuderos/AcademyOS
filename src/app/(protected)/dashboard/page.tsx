@@ -19,7 +19,11 @@ export default async function DashboardPage() {
   return (
     <main className="min-h-screen bg-gray-50">
       <nav className="border-b bg-white px-6 py-4 flex items-center justify-between">
-        <h1 className="text-lg font-bold text-gray-900">AcademyOS</h1>
+        <div className="flex items-center gap-6">
+          <h1 className="text-lg font-bold text-gray-900">AcademyOS</h1>
+          <span className="text-sm font-medium text-gray-900">Dashboard</span>
+          <a href="/grupos" className="text-sm text-gray-500 hover:text-gray-900">Grupos</a>
+        </div>
         <div className="flex items-center gap-4">
           <span className="text-sm text-gray-500">{user.email}</span>
           <form action={logout}>
