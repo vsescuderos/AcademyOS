@@ -2,8 +2,9 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { crearAlumno } from "@/actions/director";
+import { crearAlumno, eliminarAlumno } from "@/actions/director";
 import ExcelImportAlumnos from "./excel-import-alumnos";
+import EditarAlumno from "./editar-alumno";
 
 type Alumno = { id: string; full_name: string; email: string | null; phone: string | null };
 type Group = { id: string; name: string; days: string[]; time_start: string | null; time_end: string | null };
@@ -69,9 +70,33 @@ export default function AlumnosView({ alumnos, groups }: { alumnos: Alumno[]; gr
   const [formError, setFormError] = useState<string | null>(null);
   const [groupConflictError, setGroupConflictError] = useState<string | null>(null);
 
+  const [editingAlumno, setEditingAlumno] = useState<Alumno | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
   function openPanel(p: "alumno" | "excel") {
+    setEditingAlumno(null);
     setPanel((prev) => (prev === p ? "none" : p));
     setFormError(null);
+  }
+
+  function handleEditAlumno(alumno: Alumno) {
+    setEditingAlumno((prev) => (prev?.id === alumno.id ? null : alumno));
+    setPanel("none");
+    setForm(EMPTY_FORM);
+    setFormError(null);
+  }
+
+  async function handleEliminar(id: string) {
+    setDeleteError(null);
+    setDeletingId(id);
+    const result = await eliminarAlumno(id);
+    setDeletingId(null);
+    if (result.error) {
+      setDeleteError(result.error);
+    } else {
+      router.refresh();
+    }
   }
 
   function closePanel() {
@@ -313,6 +338,35 @@ export default function AlumnosView({ alumnos, groups }: { alumnos: Alumno[]; gr
           </div>
         )}
 
+        {/* Edit panel */}
+        {editingAlumno && (
+          <div style={{ padding: "20px 28px 0" }}>
+            <EditarAlumno
+              alumno={editingAlumno}
+              groups={groups}
+              onClose={() => setEditingAlumno(null)}
+              onSaved={() => { setEditingAlumno(null); router.refresh(); }}
+            />
+          </div>
+        )}
+
+        {/* Delete error */}
+        {deleteError && (
+          <div
+            style={{
+              margin: "16px 28px 0",
+              fontSize: 12.5,
+              color: "var(--err)",
+              background: "#fef2f2",
+              border: "1px solid #fecaca",
+              borderRadius: 6,
+              padding: "10px 14px",
+            }}
+          >
+            {deleteError}
+          </div>
+        )}
+
         {/* Table */}
         {alumnos.length === 0 ? (
           <p style={{ padding: "40px 28px", color: "var(--t3)", fontSize: 13 }}>
@@ -322,7 +376,7 @@ export default function AlumnosView({ alumnos, groups }: { alumnos: Alumno[]; gr
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr style={{ background: "var(--bg2)" }}>
-                {["Nombre", "Email", "Teléfono"].map((col) => (
+                {["Nombre", "Email", "Teléfono", ""].map((col) => (
                   <th
                     key={col}
                     style={{
@@ -343,7 +397,14 @@ export default function AlumnosView({ alumnos, groups }: { alumnos: Alumno[]; gr
             </thead>
             <tbody>
               {alumnos.map((a) => (
-                <AlumnoRow key={a.id} alumno={a} />
+                <AlumnoRow
+                  key={a.id}
+                  alumno={a}
+                  editing={editingAlumno?.id === a.id}
+                  deleting={deletingId === a.id}
+                  onEdit={() => handleEditAlumno(a)}
+                  onDelete={() => handleEliminar(a.id)}
+                />
               ))}
             </tbody>
           </table>
@@ -353,7 +414,19 @@ export default function AlumnosView({ alumnos, groups }: { alumnos: Alumno[]; gr
   );
 }
 
-function AlumnoRow({ alumno }: { alumno: Alumno }) {
+function AlumnoRow({
+  alumno,
+  editing,
+  deleting,
+  onEdit,
+  onDelete,
+}: {
+  alumno: Alumno;
+  editing: boolean;
+  deleting: boolean;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
   const [hovered, setHovered] = useState(false);
   return (
     <tr
@@ -369,6 +442,50 @@ function AlumnoRow({ alumno }: { alumno: Alumno }) {
       </td>
       <td style={{ padding: "11px 20px", borderBottom: "1px solid var(--line)", fontSize: 13, color: "var(--t2)" }}>
         {alumno.phone ?? "—"}
+      </td>
+      <td
+        style={{
+          padding: "11px 20px",
+          borderBottom: "1px solid var(--line)",
+          textAlign: "right",
+          whiteSpace: "nowrap",
+        }}
+      >
+        <button
+          onClick={onEdit}
+          style={{
+            fontSize: 12,
+            fontWeight: 500,
+            color: editing ? "var(--accent)" : "var(--t2)",
+            background: editing ? "var(--accent-light)" : "transparent",
+            border: `1px solid ${editing ? "var(--accent-border)" : "var(--line)"}`,
+            borderRadius: 6,
+            padding: "4px 12px",
+            cursor: "pointer",
+            marginRight: 6,
+            transition: "all 0.12s",
+          }}
+        >
+          Editar
+        </button>
+        <button
+          onClick={onDelete}
+          disabled={deleting}
+          style={{
+            fontSize: 18,
+            lineHeight: 1,
+            color: hovered ? "var(--err)" : "var(--t3)",
+            background: "none",
+            border: "none",
+            cursor: "pointer",
+            opacity: deleting ? 0.3 : 1,
+            transition: "color 0.1s",
+            verticalAlign: "middle",
+          }}
+          title="Eliminar alumno"
+        >
+          ×
+        </button>
       </td>
     </tr>
   );

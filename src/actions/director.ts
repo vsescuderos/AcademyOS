@@ -395,6 +395,116 @@ export async function actualizarAlumnosGrupo(
   return {};
 }
 
+export async function editarAlumno(
+  studentId: string,
+  data: { full_name: string; email: string; phone: string; groupIds: string[] }
+): Promise<{ error?: string }> {
+  const ctx = await getDirectorCtx();
+  if (!ctx) return { error: "Sin permiso" };
+
+  if (data.groupIds.length > 1) {
+    const { data: selectedGroups } = await ctx.supabase
+      .from("groups")
+      .select("id, name, days, time_start, time_end")
+      .in("id", data.groupIds);
+    const gs = (selectedGroups ?? []) as unknown as GroupSchedule[];
+    for (let i = 0; i < gs.length; i++) {
+      for (let j = i + 1; j < gs.length; j++) {
+        if (groupsConflict(gs[i], gs[j])) {
+          return { error: `"${gs[i].name}" y "${gs[j].name}" tienen conflicto de horario.` };
+        }
+      }
+    }
+  }
+
+  const { error } = await ctx.supabase
+    .from("students")
+    .update({ full_name: data.full_name, email: data.email || null, phone: data.phone || null })
+    .eq("id", studentId)
+    .eq("academy_id", ctx.profile.academy_id);
+  if (error) return { error: error.message };
+
+  const { data: current } = await ctx.supabase
+    .from("group_students")
+    .select("group_id")
+    .eq("student_id", studentId);
+  const currentGroupIds = new Set((current ?? []).map((r) => r.group_id));
+  const newGroupIds = new Set(data.groupIds);
+  const toRemove = [...currentGroupIds].filter((id) => !newGroupIds.has(id));
+  const toAdd = [...newGroupIds].filter((id) => !currentGroupIds.has(id));
+
+  if (toRemove.length > 0) {
+    const admin = createAdminClient();
+    for (const groupId of toRemove) {
+      const { data: sessions } = await ctx.supabase
+        .from("attendance_sessions")
+        .select("id")
+        .eq("group_id", groupId);
+      const sessionIds = (sessions ?? []).map((s) => s.id);
+      if (sessionIds.length > 0) {
+        const { count } = await ctx.supabase
+          .from("attendance_records")
+          .select("id", { count: "exact", head: true })
+          .eq("student_id", studentId)
+          .in("session_id", sessionIds);
+        if (count && count > 0) {
+          await admin.from("group_student_audit").insert({
+            academy_id: ctx.profile.academy_id,
+            group_id: groupId,
+            student_id: studentId,
+            student_name: data.full_name,
+            sessions_count: count,
+            removed_by: ctx.userId,
+          });
+        }
+      }
+    }
+    const { error: delError } = await ctx.supabase
+      .from("group_students")
+      .delete()
+      .eq("student_id", studentId)
+      .in("group_id", toRemove);
+    if (delError) return { error: delError.message };
+  }
+
+  if (toAdd.length > 0) {
+    const { error: addError } = await ctx.supabase.from("group_students").insert(
+      toAdd.map((groupId) => ({
+        group_id: groupId,
+        student_id: studentId,
+        academy_id: ctx.profile.academy_id,
+      }))
+    );
+    if (addError) return { error: addError.message };
+  }
+
+  revalidatePath("/alumnos");
+  revalidatePath("/grupos");
+  return {};
+}
+
+export async function eliminarAlumno(studentId: string): Promise<{ error?: string }> {
+  const ctx = await getDirectorCtx();
+  if (!ctx) return { error: "Sin permiso" };
+
+  const { count: recordsCount } = await ctx.supabase
+    .from("attendance_records")
+    .select("id", { count: "exact", head: true })
+    .eq("student_id", studentId);
+  if (recordsCount && recordsCount > 0) {
+    return { error: "No se puede eliminar un alumno con registros de asistencia." };
+  }
+
+  const { error } = await ctx.supabase
+    .from("students")
+    .delete()
+    .eq("id", studentId)
+    .eq("academy_id", ctx.profile.academy_id);
+  if (error) return { error: error.message };
+  revalidatePath("/alumnos");
+  return {};
+}
+
 export async function crearAlumnosBatch(
   alumnos: Array<{ full_name: string; email: string; phone: string; group_name: string }>
 ): Promise<{ created: number; errors: string[] }> {
