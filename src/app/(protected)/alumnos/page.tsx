@@ -17,11 +17,18 @@ export default async function AlumnosPage() {
 
   if (!profile || profile.role !== "director") redirect("/dashboard");
 
-  const { data: alumnos } = await supabase
-    .from("students")
-    .select("id, full_name, email, phone")
-    .eq("academy_id", profile.academy_id)
-    .order("full_name");
+  const [{ data: alumnos }, { data: groups }] = await Promise.all([
+    supabase
+      .from("students")
+      .select("id, full_name, email, phone")
+      .eq("academy_id", profile.academy_id)
+      .order("full_name"),
+    supabase
+      .from("groups")
+      .select("id, name")
+      .eq("academy_id", profile.academy_id)
+      .order("name"),
+  ]);
 
-  return <AlumnosView alumnos={alumnos ?? []} />;
+  return <AlumnosView alumnos={alumnos ?? []} groups={groups ?? []} />;
 }

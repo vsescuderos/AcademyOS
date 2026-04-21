@@ -6,8 +6,9 @@ import { crearAlumno } from "@/actions/director";
 import ExcelImportAlumnos from "./excel-import-alumnos";
 
 type Alumno = { id: string; full_name: string; email: string | null; phone: string | null };
+type Group = { id: string; name: string };
 
-const EMPTY_FORM = { full_name: "", email: "", phone: "" };
+const EMPTY_FORM = { full_name: "", email: "", phone: "", groupIds: [] as string[] };
 
 function PanelCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -52,7 +53,7 @@ const inputStyle: React.CSSProperties = {
   outline: "none",
 };
 
-export default function AlumnosView({ alumnos }: { alumnos: Alumno[] }) {
+export default function AlumnosView({ alumnos, groups }: { alumnos: Alumno[]; groups: Group[] }) {
   const router = useRouter();
   const [panel, setPanel] = useState<"none" | "alumno" | "excel">("none");
   const [isPending, startTransition] = useTransition();
@@ -69,6 +70,15 @@ export default function AlumnosView({ alumnos }: { alumnos: Alumno[] }) {
     setPanel("none");
     setForm(EMPTY_FORM);
     setFormError(null);
+  }
+
+  function toggleGroup(groupId: string) {
+    setForm((f) => ({
+      ...f,
+      groupIds: f.groupIds.includes(groupId)
+        ? f.groupIds.filter((id) => id !== groupId)
+        : [...f.groupIds, groupId],
+    }));
   }
 
   function handleCrear() {
@@ -180,6 +190,49 @@ export default function AlumnosView({ alumnos }: { alumnos: Alumno[] }) {
                     style={inputStyle}
                   />
                 </Field>
+
+                {groups.length > 0 && (
+                  <div style={{ gridColumn: "1 / -1" }}>
+                    <Field label="Grupos (opcional)">
+                      <div
+                        style={{
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: 4,
+                          marginTop: 4,
+                          border: "1px solid var(--line)",
+                          borderRadius: 6,
+                          padding: "4px 0",
+                          maxHeight: 160,
+                          overflowY: "auto",
+                        }}
+                      >
+                        {groups.map((g) => (
+                          <label
+                            key={g.id}
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 10,
+                              padding: "7px 12px",
+                              cursor: "pointer",
+                              fontSize: 13,
+                              color: "var(--t1)",
+                            }}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={form.groupIds.includes(g.id)}
+                              onChange={() => toggleGroup(g.id)}
+                              style={{ width: 14, height: 14, accentColor: "var(--accent)", cursor: "pointer" }}
+                            />
+                            {g.name}
+                          </label>
+                        ))}
+                      </div>
+                    </Field>
+                  </div>
+                )}
               </div>
 
               {formError && (

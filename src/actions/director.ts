@@ -18,7 +18,7 @@ async function getDirectorCtx() {
     .single();
 
   if (!profile || profile.role !== "director") return null;
-  return { supabase, profile };
+  return { supabase, profile, userId: user.id };
 }
 
 export async function crearGrupo(data: {
@@ -203,19 +203,116 @@ export async function crearAlumno(data: {
   full_name: string;
   email: string;
   phone: string;
+  groupIds?: string[];
 }): Promise<{ error?: string }> {
   const ctx = await getDirectorCtx();
   if (!ctx) return { error: "Sin permiso" };
 
-  const { error } = await ctx.supabase.from("students").insert({
-    academy_id: ctx.profile.academy_id,
-    full_name: data.full_name,
-    email: data.email || null,
-    phone: data.phone || null,
-  });
+  const { data: student, error } = await ctx.supabase
+    .from("students")
+    .insert({
+      academy_id: ctx.profile.academy_id,
+      full_name: data.full_name,
+      email: data.email || null,
+      phone: data.phone || null,
+    })
+    .select("id")
+    .single();
 
   if (error) return { error: error.message };
+
+  if (data.groupIds && data.groupIds.length > 0) {
+    const { error: gsError } = await ctx.supabase.from("group_students").insert(
+      data.groupIds.map((groupId) => ({
+        group_id: groupId,
+        student_id: student.id,
+        academy_id: ctx.profile.academy_id,
+      }))
+    );
+    if (gsError) return { error: gsError.message };
+  }
+
   revalidatePath("/alumnos");
+  revalidatePath("/grupos");
+  return {};
+}
+
+export async function actualizarAlumnosGrupo(
+  groupId: string,
+  studentIds: string[]
+): Promise<{ error?: string }> {
+  const ctx = await getDirectorCtx();
+  if (!ctx) return { error: "Sin permiso" };
+
+  const { data: current } = await ctx.supabase
+    .from("group_students")
+    .select("student_id")
+    .eq("group_id", groupId);
+
+  const currentIds = new Set((current ?? []).map((r) => r.student_id));
+  const newIds = new Set(studentIds);
+  const toRemove = [...currentIds].filter((id) => !newIds.has(id));
+  const toAdd = [...newIds].filter((id) => !currentIds.has(id));
+
+  if (toRemove.length > 0) {
+    const { data: groupSessions } = await ctx.supabase
+      .from("attendance_sessions")
+      .select("id")
+      .eq("group_id", groupId);
+
+    const sessionIds = (groupSessions ?? []).map((s) => s.id);
+
+    const { data: students } = await ctx.supabase
+      .from("students")
+      .select("id, full_name")
+      .in("id", toRemove);
+
+    const nameMap: Record<string, string> = {};
+    for (const s of students ?? []) nameMap[s.id] = s.full_name;
+
+    if (sessionIds.length > 0) {
+      const admin = createAdminClient();
+      for (const studentId of toRemove) {
+        const { count } = await ctx.supabase
+          .from("attendance_records")
+          .select("id", { count: "exact", head: true })
+          .eq("student_id", studentId)
+          .in("session_id", sessionIds);
+
+        if (count && count > 0) {
+          await admin.from("group_student_audit").insert({
+            academy_id: ctx.profile.academy_id,
+            group_id: groupId,
+            student_id: studentId,
+            student_name: nameMap[studentId] ?? "",
+            sessions_count: count,
+            removed_by: ctx.userId,
+          });
+        }
+      }
+    }
+
+    const { error: delError } = await ctx.supabase
+      .from("group_students")
+      .delete()
+      .eq("group_id", groupId)
+      .in("student_id", toRemove);
+
+    if (delError) return { error: delError.message };
+  }
+
+  if (toAdd.length > 0) {
+    const { error: addError } = await ctx.supabase.from("group_students").insert(
+      toAdd.map((studentId) => ({
+        group_id: groupId,
+        student_id: studentId,
+        academy_id: ctx.profile.academy_id,
+      }))
+    );
+    if (addError) return { error: addError.message };
+  }
+
+  revalidatePath("/grupos");
   return {};
 }
 

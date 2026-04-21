@@ -8,6 +8,7 @@ import {
   actualizarProfesorGrupo,
 } from "@/actions/director";
 import ExcelImportPanel from "./excel-import";
+import EditarAlumnosGrupo from "./editar-alumnos-grupo";
 
 const DAYS = [
   { key: "lunes", short: "L" },
@@ -28,6 +29,7 @@ type Group = {
   profesor_id: string | null;
 };
 type Profesor = { id: string; full_name: string; email: string };
+type Student = { id: string; full_name: string };
 
 const EMPTY_GROUP = {
   name: "",
@@ -141,12 +143,15 @@ const inputStyle: React.CSSProperties = {
 export default function GruposView({
   groups,
   profesores,
+  students,
 }: {
   groups: Group[];
   profesores: Profesor[];
+  students: Student[];
 }) {
   const router = useRouter();
   const [panel, setPanel] = useState<"none" | "grupo" | "excel">("none");
+  const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   const [groupForm, setGroupForm] = useState(EMPTY_GROUP);
@@ -173,6 +178,11 @@ export default function GruposView({
     setPanel("none");
     setGroupForm(EMPTY_GROUP);
     setGroupError(null);
+  }
+
+  function handleEditGroup(groupId: string) {
+    setEditingGroupId((prev) => (prev === groupId ? null : groupId));
+    setPanel("none");
   }
 
   function handleCrearGrupo() {
@@ -446,6 +456,22 @@ export default function GruposView({
           </div>
         )}
 
+        {/* Edit alumnos panel */}
+        {editingGroupId && (() => {
+          const g = groups.find((gr) => gr.id === editingGroupId);
+          return g ? (
+            <div style={{ padding: "20px 28px 0" }}>
+              <EditarAlumnosGrupo
+                groupId={g.id}
+                groupName={g.name}
+                allStudents={students}
+                onClose={() => setEditingGroupId(null)}
+                onSaved={() => { setEditingGroupId(null); router.refresh(); }}
+              />
+            </div>
+          ) : null;
+        })()}
+
         {/* Delete error */}
         {deleteError && (
           <div
@@ -478,7 +504,7 @@ export default function GruposView({
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr style={{ background: "var(--bg2)" }}>
-                {["Grupo", "Días", "Horario", "Profesor", ""].map((col) => (
+                {["Grupo", "Días", "Horario", "Profesor", "Alumnos", ""].map((col) => (
                   <th
                     key={col}
                     style={{
@@ -504,10 +530,12 @@ export default function GruposView({
                   group={group}
                   profesores={profesores}
                   deleting={deletingId === group.id}
+                  editing={editingGroupId === group.id}
                   onDelete={() => handleEliminar(group.id)}
                   onChangeProfesor={(pid) =>
                     handleChangeProfesor(group.id, pid)
                   }
+                  onEdit={() => handleEditGroup(group.id)}
                 />
               ))}
             </tbody>
@@ -522,14 +550,18 @@ function GroupRow({
   group,
   profesores,
   deleting,
+  editing,
   onDelete,
   onChangeProfesor,
+  onEdit,
 }: {
   group: Group;
   profesores: Profesor[];
   deleting: boolean;
+  editing: boolean;
   onDelete: () => void;
   onChangeProfesor: (id: string) => void;
+  onEdit: () => void;
 }) {
   const [hovered, setHovered] = useState(false);
 
@@ -632,6 +664,32 @@ function GroupRow({
             </option>
           ))}
         </select>
+      </td>
+
+      <td
+        style={{
+          padding: "11px 20px",
+          borderBottom: "1px solid var(--line)",
+          verticalAlign: "middle",
+        }}
+      >
+        <button
+          onClick={onEdit}
+          style={{
+            fontSize: 12,
+            fontWeight: 500,
+            color: editing ? "var(--accent)" : "var(--t2)",
+            background: editing ? "var(--accent-light)" : "transparent",
+            border: `1px solid ${editing ? "var(--accent-border)" : "var(--line)"}`,
+            borderRadius: 6,
+            padding: "4px 12px",
+            cursor: "pointer",
+            transition: "all 0.12s",
+            whiteSpace: "nowrap",
+          }}
+        >
+          Editar
+        </button>
       </td>
 
       <td

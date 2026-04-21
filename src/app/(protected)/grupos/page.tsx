@@ -17,7 +17,7 @@ export default async function GruposPage() {
 
   if (!profile || profile.role !== "director") redirect("/dashboard");
 
-  const [{ data: groups }, { data: profesores }] = await Promise.all([
+  const [{ data: groups }, { data: profesores }, { data: students }] = await Promise.all([
     supabase
       .from("groups")
       .select("id, name, days, time_start, time_end, profesor_id")
@@ -29,7 +29,12 @@ export default async function GruposPage() {
       .eq("academy_id", profile.academy_id)
       .eq("role", "profesor")
       .order("full_name"),
+    supabase
+      .from("students")
+      .select("id, full_name")
+      .eq("academy_id", profile.academy_id)
+      .order("full_name"),
   ]);
 
-  return <GruposView groups={groups ?? []} profesores={profesores ?? []} />;
+  return <GruposView groups={groups ?? []} profesores={profesores ?? []} students={students ?? []} />;
 }
