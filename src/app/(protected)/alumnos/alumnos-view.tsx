@@ -6,7 +6,14 @@ import { crearAlumno } from "@/actions/director";
 import ExcelImportAlumnos from "./excel-import-alumnos";
 
 type Alumno = { id: string; full_name: string; email: string | null; phone: string | null };
-type Group = { id: string; name: string };
+type Group = { id: string; name: string; days: string[]; time_start: string | null; time_end: string | null };
+
+function groupsConflict(a: Group, b: Group): boolean {
+  const shareDay = a.days.some((d) => b.days.includes(d));
+  if (!shareDay) return false;
+  if (!a.time_start || !a.time_end || !b.time_start || !b.time_end) return false;
+  return a.time_start < b.time_end && b.time_start < a.time_end;
+}
 
 const EMPTY_FORM = { full_name: "", email: "", phone: "", groupIds: [] as string[] };
 
@@ -60,6 +67,7 @@ export default function AlumnosView({ alumnos, groups }: { alumnos: Alumno[]; gr
 
   const [form, setForm] = useState(EMPTY_FORM);
   const [formError, setFormError] = useState<string | null>(null);
+  const [groupConflictError, setGroupConflictError] = useState<string | null>(null);
 
   function openPanel(p: "alumno" | "excel") {
     setPanel((prev) => (prev === p ? "none" : p));
@@ -70,15 +78,28 @@ export default function AlumnosView({ alumnos, groups }: { alumnos: Alumno[]; gr
     setPanel("none");
     setForm(EMPTY_FORM);
     setFormError(null);
+    setGroupConflictError(null);
   }
 
   function toggleGroup(groupId: string) {
-    setForm((f) => ({
-      ...f,
-      groupIds: f.groupIds.includes(groupId)
-        ? f.groupIds.filter((id) => id !== groupId)
-        : [...f.groupIds, groupId],
-    }));
+    setGroupConflictError(null);
+    if (form.groupIds.includes(groupId)) {
+      setForm((f) => ({ ...f, groupIds: f.groupIds.filter((id) => id !== groupId) }));
+      return;
+    }
+    const newGroup = groups.find((g) => g.id === groupId);
+    if (newGroup) {
+      const conflict = groups.find(
+        (g) => form.groupIds.includes(g.id) && groupsConflict(newGroup, g)
+      );
+      if (conflict) {
+        setGroupConflictError(
+          `"${newGroup.name}" tiene conflicto de horario con "${conflict.name}".`
+        );
+        return;
+      }
+    }
+    setForm((f) => ({ ...f, groupIds: [...f.groupIds, groupId] }));
   }
 
   function handleCrear() {
@@ -230,6 +251,11 @@ export default function AlumnosView({ alumnos, groups }: { alumnos: Alumno[]; gr
                           </label>
                         ))}
                       </div>
+                      {groupConflictError && (
+                        <p style={{ margin: "6px 12px 2px", fontSize: 12, color: "var(--err)" }}>
+                          {groupConflictError}
+                        </p>
+                      )}
                     </Field>
                   </div>
                 )}

@@ -25,7 +25,7 @@ export default async function AlumnosPage() {
       .order("full_name"),
     supabase
       .from("groups")
-      .select("id, name")
+      .select("id, name, days, time_start, time_end")
       .eq("academy_id", profile.academy_id)
       .order("name"),
   ]);

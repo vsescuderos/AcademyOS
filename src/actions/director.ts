@@ -4,6 +4,21 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
 
+type GroupSchedule = {
+  id: string;
+  name: string;
+  days: string[];
+  time_start: string | null;
+  time_end: string | null;
+};
+
+function groupsConflict(a: GroupSchedule, b: GroupSchedule): boolean {
+  const shareDay = a.days.some((d) => b.days.includes(d));
+  if (!shareDay) return false;
+  if (!a.time_start || !a.time_end || !b.time_start || !b.time_end) return false;
+  return a.time_start < b.time_end && b.time_start < a.time_end;
+}
+
 async function getDirectorCtx() {
   const supabase = await createClient();
   const {
@@ -208,6 +223,24 @@ export async function crearAlumno(data: {
   const ctx = await getDirectorCtx();
   if (!ctx) return { error: "Sin permiso" };
 
+  if (data.groupIds && data.groupIds.length > 1) {
+    const { data: selectedGroups } = await ctx.supabase
+      .from("groups")
+      .select("id, name, days, time_start, time_end")
+      .in("id", data.groupIds);
+
+    const gs = (selectedGroups ?? []) as unknown as GroupSchedule[];
+    for (let i = 0; i < gs.length; i++) {
+      for (let j = i + 1; j < gs.length; j++) {
+        if (groupsConflict(gs[i], gs[j])) {
+          return {
+            error: `"${gs[i].name}" y "${gs[j].name}" tienen conflicto de horario.`,
+          };
+        }
+      }
+    }
+  }
+
   const { data: student, error } = await ctx.supabase
     .from("students")
     .insert({
@@ -253,6 +286,52 @@ export async function actualizarAlumnosGrupo(
   const newIds = new Set(studentIds);
   const toRemove = [...currentIds].filter((id) => !newIds.has(id));
   const toAdd = [...newIds].filter((id) => !currentIds.has(id));
+
+  if (toAdd.length > 0) {
+    const { data: targetGroupData } = await ctx.supabase
+      .from("groups")
+      .select("id, name, days, time_start, time_end")
+      .eq("id", groupId)
+      .single();
+
+    if (targetGroupData) {
+      const targetGroup = targetGroupData as unknown as GroupSchedule;
+
+      const { data: memberships } = await ctx.supabase
+        .from("group_students")
+        .select("student_id, group_id")
+        .in("student_id", toAdd)
+        .neq("group_id", groupId);
+
+      if (memberships && memberships.length > 0) {
+        const existingGroupIds = [...new Set(memberships.map((m) => m.group_id))];
+        const { data: existingGroupsData } = await ctx.supabase
+          .from("groups")
+          .select("id, name, days, time_start, time_end")
+          .in("id", existingGroupIds);
+
+        const groupMap = new Map(
+          (existingGroupsData ?? []).map((g) => [g.id, g as unknown as GroupSchedule])
+        );
+
+        const { data: studentNames } = await ctx.supabase
+          .from("students")
+          .select("id, full_name")
+          .in("id", toAdd);
+        const nameMap = new Map((studentNames ?? []).map((s) => [s.id, s.full_name]));
+
+        for (const m of memberships) {
+          const eg = groupMap.get(m.group_id);
+          if (eg && groupsConflict(targetGroup, eg)) {
+            const name = nameMap.get(m.student_id) ?? "Un alumno";
+            return {
+              error: `"${name}" ya está en "${eg.name}" que tiene conflicto de horario con este grupo.`,
+            };
+          }
+        }
+      }
+    }
+  }
 
   if (toRemove.length > 0) {
     const { data: groupSessions } = await ctx.supabase
