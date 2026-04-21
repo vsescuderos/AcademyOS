@@ -6,8 +6,8 @@ import {
   crearGrupo,
   eliminarGrupo,
   actualizarProfesorGrupo,
-  crearProfesor,
 } from "@/actions/director";
+import ExcelImportPanel from "./excel-import";
 
 const DAYS = [
   { key: "lunes", short: "L" },
@@ -36,8 +36,6 @@ const EMPTY_GROUP = {
   time_start: "",
   time_end: "",
 };
-const EMPTY_PROFESOR = { full_name: "", email: "", password: "" };
-
 // ── shared sub-components ──────────────────────────────────────────────────
 
 function Pill({
@@ -148,14 +146,11 @@ export default function GruposView({
   profesores: Profesor[];
 }) {
   const router = useRouter();
-  const [panel, setPanel] = useState<"none" | "grupo" | "profesor">("none");
+  const [panel, setPanel] = useState<"none" | "grupo" | "excel">("none");
   const [isPending, startTransition] = useTransition();
 
   const [groupForm, setGroupForm] = useState(EMPTY_GROUP);
   const [groupError, setGroupError] = useState<string | null>(null);
-
-  const [profesorForm, setProfesorForm] = useState(EMPTY_PROFESOR);
-  const [profesorError, setProfesorError] = useState<string | null>(null);
 
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -169,18 +164,15 @@ export default function GruposView({
     }));
   }
 
-  function openPanel(p: "grupo" | "profesor") {
+  function openPanel(p: "grupo" | "excel") {
     setPanel((prev) => (prev === p ? "none" : p));
     setGroupError(null);
-    setProfesorError(null);
   }
 
   function closePanel() {
     setPanel("none");
     setGroupForm(EMPTY_GROUP);
-    setProfesorForm(EMPTY_PROFESOR);
     setGroupError(null);
-    setProfesorError(null);
   }
 
   function handleCrearGrupo() {
@@ -198,26 +190,6 @@ export default function GruposView({
       });
       if (result.error) {
         setGroupError(result.error);
-      } else {
-        closePanel();
-        router.refresh();
-      }
-    });
-  }
-
-  function handleCrearProfesor() {
-    if (
-      !profesorForm.full_name.trim() ||
-      !profesorForm.email.trim() ||
-      !profesorForm.password
-    ) {
-      setProfesorError("Todos los campos son obligatorios.");
-      return;
-    }
-    startTransition(async () => {
-      const result = await crearProfesor(profesorForm);
-      if (result.error) {
-        setProfesorError(result.error);
       } else {
         closePanel();
         router.refresh();
@@ -262,7 +234,7 @@ export default function GruposView({
         </span>
         <div style={{ display: "flex", gap: 8 }}>
           <button
-            onClick={() => openPanel("profesor")}
+            onClick={() => openPanel("excel")}
             style={{
               fontSize: 12.5,
               color: "var(--t2)",
@@ -273,7 +245,7 @@ export default function GruposView({
               cursor: "pointer",
             }}
           >
-            + Nuevo profesor
+            Importar Excel
           </button>
           <button
             onClick={() => openPanel("grupo")}
@@ -296,10 +268,21 @@ export default function GruposView({
       {/* Scrollable content */}
       <div style={{ flex: 1, overflowY: "auto" }}>
         {/* Forms */}
-        {(panel === "grupo" || panel === "profesor") && (
+        {panel === "excel" && (
           <div style={{ padding: "20px 28px 0" }}>
-            {panel === "grupo" && (
-              <PanelCard title="Nuevo grupo">
+            <ExcelImportPanel
+              onSuccess={() => {
+                closePanel();
+                router.refresh();
+              }}
+              onCancel={closePanel}
+            />
+          </div>
+        )}
+
+        {panel === "grupo" && (
+          <div style={{ padding: "20px 28px 0" }}>
+            <PanelCard title="Nuevo grupo">
                 <div
                   style={{
                     display: "grid",
@@ -460,111 +443,6 @@ export default function GruposView({
                   </button>
                 </div>
               </PanelCard>
-            )}
-
-            {panel === "profesor" && (
-              <PanelCard title="Nuevo profesor">
-                <div style={{ display: "grid", gap: 14 }}>
-                  <Field label="Nombre completo">
-                    <input
-                      type="text"
-                      value={profesorForm.full_name}
-                      onChange={(e) =>
-                        setProfesorForm((f) => ({
-                          ...f,
-                          full_name: e.target.value,
-                        }))
-                      }
-                      placeholder="Ana García"
-                      style={inputStyle}
-                    />
-                  </Field>
-                  <Field label="Email">
-                    <input
-                      type="email"
-                      value={profesorForm.email}
-                      onChange={(e) =>
-                        setProfesorForm((f) => ({
-                          ...f,
-                          email: e.target.value,
-                        }))
-                      }
-                      placeholder="ana@academia.com"
-                      style={inputStyle}
-                    />
-                  </Field>
-                  <Field label="Contraseña">
-                    <input
-                      type="password"
-                      value={profesorForm.password}
-                      onChange={(e) =>
-                        setProfesorForm((f) => ({
-                          ...f,
-                          password: e.target.value,
-                        }))
-                      }
-                      style={inputStyle}
-                    />
-                  </Field>
-                </div>
-
-                {profesorError && (
-                  <p
-                    style={{
-                      marginTop: 12,
-                      fontSize: 12.5,
-                      color: "var(--err)",
-                      background: "#fef2f2",
-                      borderRadius: 6,
-                      padding: "8px 12px",
-                    }}
-                  >
-                    {profesorError}
-                  </p>
-                )}
-
-                <div
-                  style={{
-                    display: "flex",
-                    gap: 8,
-                    justifyContent: "flex-end",
-                    marginTop: 16,
-                  }}
-                >
-                  <button
-                    onClick={closePanel}
-                    style={{
-                      fontSize: 12.5,
-                      color: "var(--t2)",
-                      border: "1px solid var(--line)",
-                      borderRadius: 6,
-                      padding: "6px 14px",
-                      background: "transparent",
-                      cursor: "pointer",
-                    }}
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    onClick={handleCrearProfesor}
-                    disabled={isPending}
-                    style={{
-                      fontSize: 12.5,
-                      fontWeight: 500,
-                      color: "#fff",
-                      border: "none",
-                      borderRadius: 6,
-                      padding: "6px 16px",
-                      background: "var(--accent)",
-                      cursor: "pointer",
-                      opacity: isPending ? 0.6 : 1,
-                    }}
-                  >
-                    {isPending ? "Guardando…" : "Crear profesor"}
-                  </button>
-                </div>
-              </PanelCard>
-            )}
           </div>
         )}
 

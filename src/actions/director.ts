@@ -89,6 +89,40 @@ export async function actualizarProfesorGrupo(
   return {};
 }
 
+export async function crearGruposBatch(
+  grupos: Array<{
+    name: string;
+    days: string[];
+    time_start: string | null;
+    time_end: string | null;
+  }>
+): Promise<{ created: number; errors: string[] }> {
+  const ctx = await getDirectorCtx();
+  if (!ctx) return { created: 0, errors: ["Sin permiso"] };
+
+  let created = 0;
+  const errors: string[] = [];
+
+  for (const g of grupos) {
+    const { error } = await ctx.supabase.from("groups").insert({
+      academy_id: ctx.profile.academy_id,
+      name: g.name,
+      profesor_id: null,
+      days: g.days,
+      time_start: g.time_start || null,
+      time_end: g.time_end || null,
+    });
+    if (error) {
+      errors.push(`"${g.name}": ${error.message}`);
+    } else {
+      created++;
+    }
+  }
+
+  if (created > 0) revalidatePath("/grupos");
+  return { created, errors };
+}
+
 export async function crearProfesor(data: {
   full_name: string;
   email: string;
@@ -122,5 +156,92 @@ export async function crearProfesor(data: {
   }
 
   revalidatePath("/grupos");
+  revalidatePath("/profesores");
   return {};
+}
+
+export async function crearProfesoresBatch(
+  profesores: Array<{ full_name: string; email: string; password: string }>
+): Promise<{ created: number; errors: string[] }> {
+  const ctx = await getDirectorCtx();
+  if (!ctx) return { created: 0, errors: ["Sin permiso"] };
+
+  const admin = createAdminClient();
+  let created = 0;
+  const errors: string[] = [];
+
+  for (const p of profesores) {
+    const { data: authUser, error: authError } = await admin.auth.admin.createUser({
+      email: p.email,
+      password: p.password,
+      email_confirm: true,
+    });
+    if (authError) {
+      errors.push(`"${p.full_name}": ${authError.message}`);
+      continue;
+    }
+    const { error: profileError } = await admin.from("profiles").insert({
+      id: authUser.user.id,
+      academy_id: ctx.profile.academy_id,
+      role: "profesor",
+      full_name: p.full_name,
+      email: p.email,
+    });
+    if (profileError) {
+      await admin.auth.admin.deleteUser(authUser.user.id);
+      errors.push(`"${p.full_name}": ${profileError.message}`);
+    } else {
+      created++;
+    }
+  }
+
+  if (created > 0) revalidatePath("/profesores");
+  return { created, errors };
+}
+
+export async function crearAlumno(data: {
+  full_name: string;
+  email: string;
+  phone: string;
+}): Promise<{ error?: string }> {
+  const ctx = await getDirectorCtx();
+  if (!ctx) return { error: "Sin permiso" };
+
+  const { error } = await ctx.supabase.from("students").insert({
+    academy_id: ctx.profile.academy_id,
+    full_name: data.full_name,
+    email: data.email || null,
+    phone: data.phone || null,
+  });
+
+  if (error) return { error: error.message };
+  revalidatePath("/alumnos");
+  return {};
+}
+
+export async function crearAlumnosBatch(
+  alumnos: Array<{ full_name: string; email: string; phone: string }>
+): Promise<{ created: number; errors: string[] }> {
+  const ctx = await getDirectorCtx();
+  if (!ctx) return { created: 0, errors: ["Sin permiso"] };
+
+  let created = 0;
+  const errors: string[] = [];
+
+  for (const a of alumnos) {
+    const { error } = await ctx.supabase.from("students").insert({
+      academy_id: ctx.profile.academy_id,
+      full_name: a.full_name,
+      email: a.email || null,
+      phone: a.phone || null,
+    });
+    if (error) {
+      errors.push(`"${a.full_name}": ${error.message}`);
+    } else {
+      created++;
+    }
+  }
+
+  if (created > 0) revalidatePath("/alumnos");
+  return { created, errors };
 }

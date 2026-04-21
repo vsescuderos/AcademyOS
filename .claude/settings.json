@@ -35,7 +35,13 @@
       "PowerShell(Stop-Process -Id 17276, 31100, 4724 -Force -ErrorAction SilentlyContinue)",
       "Bash(curl -s -L \"http://localhost:3000/login\")",
       "WebFetch(domain:api.anthropic.com)",
-      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/login)"
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/login)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/dashboard)",
+      "Bash(git commit -m 'fix: eliminar event handlers de Server Component en dashboard *)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" -L http://localhost:3000/dashboard)",
+      "Bash(npm install *)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" -L http://localhost:3000/grupos)"
     ]
   }
 }

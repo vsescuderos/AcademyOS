@@ -1,5 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { redirect } from "next/navigation";
+import HomeView from "./home-view";
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -11,74 +13,70 @@ export default async function DashboardPage() {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("role")
+    .select("role, academy_id")
     .eq("id", user.id)
     .single();
 
   if (profile?.role === "profesor") redirect("/asistencia");
+  if (!profile || profile.role !== "director") redirect("/login");
+
+  // Fetch all academy IDs this director has access to
+  const { data: links } = await supabase
+    .from("director_academies")
+    .select("academy_id")
+    .eq("director_id", user.id);
+
+  const academyIds = links?.map((l) => l.academy_id) ?? [];
+
+  // Use admin client: RLS on academies only shows the active one,
+  // but here we need all of the director's academies
+  const admin = createAdminClient();
+  let allAcademies: { id: string; name: string; created_at: string }[] = [];
+  if (academyIds.length > 0) {
+    const { data } = await admin
+      .from("academies")
+      .select("id, name, created_at")
+      .in("id", academyIds)
+      .order("created_at");
+    allAcademies = data ?? [];
+  }
+
+  const activeAcademyId = profile.academy_id as string | null;
+  const activeAcademy =
+    allAcademies.find((a) => a.id === activeAcademyId) ?? null;
+
+  let groupCount = 0;
+  let professorCount = 0;
+  let studentCount = 0;
+
+  if (activeAcademyId) {
+    const [groupRes, profRes, studentRes] = await Promise.all([
+      supabase
+        .from("groups")
+        .select("id", { count: "exact", head: true })
+        .eq("academy_id", activeAcademyId),
+      supabase
+        .from("profiles")
+        .select("id", { count: "exact", head: true })
+        .eq("academy_id", activeAcademyId)
+        .eq("role", "profesor"),
+      supabase
+        .from("students")
+        .select("id", { count: "exact", head: true })
+        .eq("academy_id", activeAcademyId),
+    ]);
+    groupCount = groupRes.count ?? 0;
+    professorCount = profRes.count ?? 0;
+    studentCount = studentRes.count ?? 0;
+  }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      <div
-        style={{
-          height: 54,
-          borderBottom: "1px solid var(--line)",
-          display: "flex",
-          alignItems: "center",
-          padding: "0 28px",
-          flexShrink: 0,
-          background: "var(--bg)",
-        }}
-      >
-        <span style={{ fontWeight: 600, fontSize: 16, color: "var(--t1)" }}>
-          Dashboard
-        </span>
-      </div>
-
-      <div style={{ flex: 1, overflowY: "auto", padding: "32px 28px" }}>
-        <h2
-          style={{
-            fontSize: 20,
-            fontWeight: 600,
-            color: "var(--t1)",
-            marginBottom: 8,
-          }}
-        >
-          Bienvenido a AcademyOS
-        </h2>
-        <p style={{ color: "var(--t2)", fontSize: 14, marginBottom: 32 }}>
-          Gestiona tu academia desde el panel lateral.
-        </p>
-
-        <div style={{ display: "flex", gap: 16 }}>
-          <a
-            href="/grupos"
-            className="dashboard-card"
-          >
-            <div
-              style={{
-                fontSize: 11,
-                fontWeight: 600,
-                color: "var(--t3)",
-                textTransform: "uppercase",
-                letterSpacing: "0.06em",
-                marginBottom: 8,
-              }}
-            >
-              Grupos
-            </div>
-            <div
-              style={{
-                fontSize: 13,
-                color: "var(--accent)",
-                fontWeight: 500,
-              }}
-            >
-              Gestionar grupos →
-            </div>
-          </a>
-        </div>
-      </div>
-    </div>
+    <HomeView
+      activeAcademy={activeAcademy}
+      allAcademies={allAcademies}
+      groupCount={groupCount}
+      professorCount={professorCount}
+      studentCount={studentCount}
+    />
   );
 }

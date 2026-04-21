@@ -15,10 +15,14 @@ export default async function AsistenciaPage() {
 
   if (!profile || profile.role !== "profesor") redirect("/dashboard");
 
+  const DAY_KEYS = ["domingo", "lunes", "martes", "miercoles", "jueves", "viernes", "sabado"];
+  const todayKey = DAY_KEYS[new Date().getDay()];
+
   const { data: groups } = await supabase
     .from("groups")
     .select("id, name")
     .eq("profesor_id", user.id)
+    .contains("days", [todayKey])
     .order("name");
 
   return <AsistenciaView groups={groups ?? []} />;

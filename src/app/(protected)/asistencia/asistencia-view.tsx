@@ -36,7 +36,7 @@ export default function AsistenciaView({ groups }: { groups: Group[] }) {
       .eq("group_id", groupId);
 
     const students: Student[] = (gsData ?? [])
-      .map((d) => (d as { students: Student }).students)
+      .map((d) => (d as unknown as { students: Student }).students)
       .filter(Boolean);
 
     const { data: session } = await supabase

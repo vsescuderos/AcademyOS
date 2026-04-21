@@ -126,8 +126,10 @@ export default function Sidebar({
   userName: string;
 }) {
   const directorNav = [
-    { href: "/dashboard", label: "Dashboard" },
+    { href: "/dashboard", label: "Inicio" },
     { href: "/grupos", label: "Grupos" },
+    { href: "/profesores", label: "Profesores" },
+    { href: "/alumnos", label: "Alumnos" },
   ];
   const profesorNav = [{ href: "/asistencia", label: "Asistencia" }];
   const navItems = role === "profesor" ? profesorNav : directorNav;

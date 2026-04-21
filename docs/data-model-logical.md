@@ -18,11 +18,23 @@ Es la raíz del sistema multi-tenant. Cada academia es un tenant independiente. 
 
 ### `profiles` — Usuarios del sistema
 
-Extiende `auth.users` de Supabase con los datos de negocio del usuario: a qué academia pertenece y qué rol tiene. Es el puente entre la identidad de autenticación y el modelo de datos.
+Extiende `auth.users` de Supabase con los datos de negocio del usuario: a qué academia pertenece activamente y qué rol tiene. Es el puente entre la identidad de autenticación y el modelo de datos.
 
-**Propósito en el negocio:** determina quién es el usuario dentro del sistema, qué academia ve y qué puede hacer. Sin un perfil válido, un usuario autenticado no tiene acceso a nada.
+**Propósito en el negocio:** determina quién es el usuario dentro del sistema, qué academia ve en este momento y qué puede hacer. Sin un perfil válido, un usuario autenticado no tiene acceso a nada.
 
 **Decisión de diseño:** `profiles.id` es igual a `auth.uid()`. No se crea un `user_id` separado. Esto simplifica las políticas RLS, que pueden usar `auth.uid()` directamente para localizar el perfil del usuario autenticado.
+
+**Para el Director:** `profiles.academy_id` representa la **academia activa** en la sesión actual. El Director puede tener varias academias (ver `director_academies`), pero las políticas RLS filtran siempre por la academia activa. Cambiar de academia actualiza este campo.
+
+---
+
+### `director_academies` — Relación Director ↔ Academias
+
+Tabla de unión que registra todas las academias que un Director puede gestionar. Permite que un Director sea propietario de múltiples academias manteniendo el aislamiento total entre ellas.
+
+**Propósito en el negocio:** un Director puede crear y administrar varias academias (por ejemplo, una sede principal y una filial). En cada sesión trabaja sobre una sola academia activa, determinada por `profiles.academy_id`. La tabla `director_academies` es la fuente de verdad de a qué academias tiene acceso un Director.
+
+**Decisión de diseño:** la academia activa se almacena en `profiles.academy_id` en lugar de en una cookie de sesión, para que las políticas RLS continúen funcionando sin cambios. Al cambiar de academia, el servidor actualiza `profiles.academy_id` previa verificación de que el Director tiene acceso en `director_academies`.
 
 ---
 
@@ -113,6 +125,7 @@ academies
 
 | Relación | Tipo | Descripción |
 |---|---|---|
+| `profiles` (director) ↔ `academies` | N:M via `director_academies` | Un Director puede gestionar múltiples academias |
 | `academies` → `profiles` | 1:N | Una academia tiene múltiples usuarios con roles |
 | `academies` → `groups` | 1:N | Una academia tiene múltiples grupos |
 | `academies` → `students` | 1:N | Una academia tiene múltiples alumnos |
@@ -153,7 +166,7 @@ Los alumnos no son usuarios del sistema en el MVP. Forzar esa relación crearía
 | Campo | Tipo | Descripción |
 |---|---|---|
 | `id` | uuid PK = auth.uid() | Mismo ID que el usuario en Supabase Auth |
-| `academy_id` | uuid FK → academies NOT NULL | Tenant al que pertenece el usuario |
+| `academy_id` | uuid FK → academies NULLABLE | Academia activa del usuario (tenant actual de la sesión) |
 | `role` | text NOT NULL | Rol del usuario: `director`, `profesor`, `superadmin` |
 | `full_name` | text NOT NULL | Nombre completo del usuario |
 | `email` | text | Denormalizado desde auth.users para facilitar listados |
@@ -161,8 +174,23 @@ Los alumnos no son usuarios del sistema en el MVP. Forzar esa relación crearía
 
 **Restricciones:**
 - `role` solo acepta los valores `director`, `profesor`, `superadmin` (CHECK constraint).
-- `academy_id` no puede ser NULL para roles `director` y `profesor`.
-- Ningún usuario puede modificar su propio `role` ni `academy_id` (gestionado por RLS).
+- `academy_id` puede ser NULL para el Director (si aún no ha creado ninguna academia). Para el Profesor, siempre tiene valor.
+- Ningún usuario puede modificar su propio `role` directamente (gestionado por RLS). El cambio de `academy_id` del Director se hace exclusivamente mediante la acción `cambiarAcademia` que verifica `director_academies`.
+
+---
+
+### `director_academies`
+
+| Campo | Tipo | Descripción |
+|---|---|---|
+| `director_id` | uuid PK+FK → profiles | Director propietario |
+| `academy_id` | uuid PK+FK → academies | Academia gestionada |
+| `created_at` | timestamptz | Fecha de asociación |
+
+**Restricciones:**
+- PK compuesta `(director_id, academy_id)`: un Director no puede estar vinculado dos veces a la misma academia.
+- CASCADE en ambas FK: si se elimina un Director o una Academia, el vínculo desaparece automáticamente.
+- RLS: un Director solo puede leer sus propios vínculos (`director_id = auth.uid()`).
 
 ---
 
@@ -337,7 +365,7 @@ No se crean vistas materializadas ni tablas de agregación para el MVP.
 Reglas que el modelo debe cumplir en todo momento. Combinan constraints de base de datos, validaciones de RLS y lógica de negocio.
 
 ### ID-1: Toda entidad de negocio tiene `academy_id`
-Las tablas `profiles`, `groups`, `students`, `group_students`, `attendance_sessions`, `attendance_records` y `payments` tienen `academy_id NOT NULL`. No existe un registro de negocio sin tenant asignado.
+Las tablas `groups`, `students`, `group_students`, `attendance_sessions`, `attendance_records` y `payments` tienen `academy_id NOT NULL`. `profiles.academy_id` puede ser NULL para un Director sin academia aún creada. No existe un registro operativo (grupos, alumnos, asistencia, pagos) sin tenant asignado.
 
 ### ID-2: Un alumno pertenece a exactamente un tenant
 `students.academy_id` es inmutable una vez creado el registro. Un alumno no puede transferirse entre academias ni existir en dos academias simultáneamente.
