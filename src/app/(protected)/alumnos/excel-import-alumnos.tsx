@@ -3,16 +3,16 @@
 import { useState, useRef, useTransition } from "react";
 import { crearAlumnosBatch } from "@/actions/director";
 
-type ParsedAlumno = { full_name: string; email: string; phone: string };
+type ParsedAlumno = { full_name: string; email: string; phone: string; group_name: string };
 
 async function downloadTemplate() {
   const XLSX = await import("xlsx");
   const ws = XLSX.utils.aoa_to_sheet([
-    ["Nombre *", "Email", "Teléfono"],
-    ["Carlos Ruiz", "carlos@email.com", "600 000 000"],
-    ["Ana Torres", "ana@email.com", ""],
+    ["Nombre *", "Email", "Teléfono", "Grupo"],
+    ["Carlos Ruiz", "carlos@email.com", "600 000 000", "Grupo Avanzado"],
+    ["Ana Torres", "ana@email.com", "", ""],
   ]);
-  ws["!cols"] = [{ wch: 28 }, { wch: 28 }, { wch: 18 }];
+  ws["!cols"] = [{ wch: 28 }, { wch: 28 }, { wch: 18 }, { wch: 24 }];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Alumnos");
   XLSX.writeFile(wb, "plantilla_alumnos.xlsx");
@@ -35,13 +35,14 @@ async function parseFile(file: File): Promise<{ rows: ParsedAlumno[]; errors: st
 
     const email = row[1] ? String(row[1]).trim() : "";
     const phone = row[2] ? String(row[2]).trim() : "";
+    const group_name = row[3] ? String(row[3]).trim() : "";
 
     if (!full_name) {
       errors.push(`Fila ${i + 1}: el nombre es obligatorio.`);
       continue;
     }
 
-    rows.push({ full_name, email, phone });
+    rows.push({ full_name, email, phone, group_name });
   }
 
   return { rows, errors };
@@ -124,7 +125,7 @@ export default function ExcelImportAlumnos({
       >
         <div style={{ flex: 1, fontSize: 12.5, color: "var(--t2)" }}>
           Descarga la plantilla, rellena los alumnos y súbela aquí. Columnas:{" "}
-          <strong>Nombre</strong>, Email (opcional), Teléfono (opcional).
+          <strong>Nombre</strong>, Email (opcional), Teléfono (opcional), Grupo (opcional).
         </div>
         <button
           onClick={downloadTemplate}
@@ -199,7 +200,7 @@ export default function ExcelImportAlumnos({
           >
             <thead>
               <tr style={{ background: "var(--bg2)" }}>
-                {["Nombre", "Email", "Teléfono"].map((h) => (
+                {["Nombre", "Email", "Teléfono", "Grupo"].map((h) => (
                   <th
                     key={h}
                     style={{
@@ -224,6 +225,7 @@ export default function ExcelImportAlumnos({
                   <td style={{ padding: "7px 12px", color: "var(--t1)" }}>{r.full_name}</td>
                   <td style={{ padding: "7px 12px", color: "var(--t2)" }}>{r.email || "—"}</td>
                   <td style={{ padding: "7px 12px", color: "var(--t2)" }}>{r.phone || "—"}</td>
+                  <td style={{ padding: "7px 12px", color: "var(--t2)" }}>{r.group_name || "—"}</td>
                 </tr>
               ))}
             </tbody>

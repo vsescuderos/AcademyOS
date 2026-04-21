@@ -396,28 +396,59 @@ export async function actualizarAlumnosGrupo(
 }
 
 export async function crearAlumnosBatch(
-  alumnos: Array<{ full_name: string; email: string; phone: string }>
+  alumnos: Array<{ full_name: string; email: string; phone: string; group_name: string }>
 ): Promise<{ created: number; errors: string[] }> {
   const ctx = await getDirectorCtx();
   if (!ctx) return { created: 0, errors: ["Sin permiso"] };
+
+  const { data: groups } = await ctx.supabase
+    .from("groups")
+    .select("id, name")
+    .eq("academy_id", ctx.profile.academy_id);
+
+  const groupByName = new Map(
+    (groups ?? []).map((g) => [g.name.toLowerCase().trim(), g.id])
+  );
 
   let created = 0;
   const errors: string[] = [];
 
   for (const a of alumnos) {
-    const { error } = await ctx.supabase.from("students").insert({
-      academy_id: ctx.profile.academy_id,
-      full_name: a.full_name,
-      email: a.email || null,
-      phone: a.phone || null,
-    });
+    const { data: student, error } = await ctx.supabase
+      .from("students")
+      .insert({
+        academy_id: ctx.profile.academy_id,
+        full_name: a.full_name,
+        email: a.email || null,
+        phone: a.phone || null,
+      })
+      .select("id")
+      .single();
+
     if (error) {
       errors.push(`"${a.full_name}": ${error.message}`);
-    } else {
-      created++;
+      continue;
     }
+
+    if (a.group_name) {
+      const groupId = groupByName.get(a.group_name.toLowerCase().trim());
+      if (groupId) {
+        await ctx.supabase.from("group_students").insert({
+          group_id: groupId,
+          student_id: student.id,
+          academy_id: ctx.profile.academy_id,
+        });
+      } else {
+        errors.push(`"${a.full_name}": grupo "${a.group_name}" no encontrado (alumno creado sin grupo).`);
+      }
+    }
+
+    created++;
   }
 
-  if (created > 0) revalidatePath("/alumnos");
+  if (created > 0) {
+    revalidatePath("/alumnos");
+    revalidatePath("/grupos");
+  }
   return { created, errors };
 }
