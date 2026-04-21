@@ -1,10 +1,11 @@
-import { logout } from "@/actions/auth";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 
 export default async function DashboardPage() {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   if (!user) redirect("/login");
 
@@ -17,30 +18,84 @@ export default async function DashboardPage() {
   if (profile?.role === "profesor") redirect("/asistencia");
 
   return (
-    <main className="min-h-screen bg-gray-50">
-      <nav className="border-b bg-white px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-6">
-          <h1 className="text-lg font-bold text-gray-900">AcademyOS</h1>
-          <span className="text-sm font-medium text-gray-900">Dashboard</span>
-          <a href="/grupos" className="text-sm text-gray-500 hover:text-gray-900">Grupos</a>
-        </div>
-        <div className="flex items-center gap-4">
-          <span className="text-sm text-gray-500">{user.email}</span>
-          <form action={logout}>
-            <button
-              type="submit"
-              className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
-            >
-              Cerrar sesión
-            </button>
-          </form>
-        </div>
-      </nav>
-
-      <div className="mx-auto max-w-4xl px-6 py-12">
-        <h2 className="text-2xl font-bold text-gray-900">Dashboard</h2>
-        <p className="mt-2 text-gray-500">Bienvenido a AcademyOS, {user.email}</p>
+    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+      <div
+        style={{
+          height: 54,
+          borderBottom: "1px solid var(--line)",
+          display: "flex",
+          alignItems: "center",
+          padding: "0 28px",
+          flexShrink: 0,
+          background: "var(--bg)",
+        }}
+      >
+        <span style={{ fontWeight: 600, fontSize: 16, color: "var(--t1)" }}>
+          Dashboard
+        </span>
       </div>
-    </main>
+
+      <div style={{ flex: 1, overflowY: "auto", padding: "32px 28px" }}>
+        <h2
+          style={{
+            fontSize: 20,
+            fontWeight: 600,
+            color: "var(--t1)",
+            marginBottom: 8,
+          }}
+        >
+          Bienvenido a AcademyOS
+        </h2>
+        <p style={{ color: "var(--t2)", fontSize: 14, marginBottom: 32 }}>
+          Gestiona tu academia desde el panel lateral.
+        </p>
+
+        <div style={{ display: "flex", gap: 16 }}>
+          <a
+            href="/grupos"
+            style={{
+              display: "block",
+              padding: "20px 24px",
+              background: "var(--bg)",
+              border: "1px solid var(--line)",
+              borderRadius: 10,
+              textDecoration: "none",
+              minWidth: 200,
+              transition: "border-color 0.12s",
+            }}
+            onMouseEnter={(e) =>
+              ((e.currentTarget as HTMLElement).style.borderColor =
+                "var(--accent-border)")
+            }
+            onMouseLeave={(e) =>
+              ((e.currentTarget as HTMLElement).style.borderColor =
+                "var(--line)")
+            }
+          >
+            <div
+              style={{
+                fontSize: 11,
+                fontWeight: 600,
+                color: "var(--t3)",
+                textTransform: "uppercase",
+                letterSpacing: "0.06em",
+                marginBottom: 8,
+              }}
+            >
+              Grupos
+            </div>
+            <div
+              style={{
+                fontSize: 13,
+                color: "var(--accent)",
+                fontWeight: 500,
+              }}
+            >
+              Gestionar grupos →
+            </div>
+          </a>
+        </div>
+      </div>
+    </div>
   );
 }

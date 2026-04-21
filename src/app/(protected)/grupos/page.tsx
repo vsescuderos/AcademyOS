@@ -31,11 +31,5 @@ export default async function GruposPage() {
       .order("full_name"),
   ]);
 
-  return (
-    <GruposView
-      groups={groups ?? []}
-      profesores={profesores ?? []}
-      directorEmail={user.email ?? ""}
-    />
-  );
+  return <GruposView groups={groups ?? []} profesores={profesores ?? []} />;
 }

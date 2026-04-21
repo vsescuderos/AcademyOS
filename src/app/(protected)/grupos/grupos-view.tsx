@@ -2,7 +2,6 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { logout } from "@/actions/auth";
 import {
   crearGrupo,
   eliminarGrupo,
@@ -30,32 +29,132 @@ type Group = {
 };
 type Profesor = { id: string; full_name: string; email: string };
 
-const EMPTY_GROUP_FORM = {
+const EMPTY_GROUP = {
   name: "",
   profesor_id: "",
   days: [] as string[],
   time_start: "",
   time_end: "",
 };
-const EMPTY_PROFESOR_FORM = { full_name: "", email: "", password: "" };
+const EMPTY_PROFESOR = { full_name: "", email: "", password: "" };
+
+// ── shared sub-components ──────────────────────────────────────────────────
+
+function Pill({
+  children,
+  variant = "neutral",
+}: {
+  children: React.ReactNode;
+  variant?: "neutral" | "active" | "green";
+}) {
+  const styles: Record<string, [string, string]> = {
+    neutral: ["#f3f4f6", "#6b7280"],
+    active: ["var(--ok-dim)", "var(--ok)"],
+    green: ["var(--ok-dim)", "var(--ok)"],
+  };
+  const [bg, color] = styles[variant] ?? styles.neutral;
+  return (
+    <span
+      style={{
+        fontSize: 11,
+        fontWeight: 500,
+        padding: "2px 8px",
+        borderRadius: 20,
+        background: bg,
+        color,
+        whiteSpace: "nowrap",
+      }}
+    >
+      {children}
+    </span>
+  );
+}
+
+function PanelCard({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      style={{
+        background: "var(--bg)",
+        border: "1px solid var(--line)",
+        borderRadius: 10,
+        padding: 20,
+        marginBottom: 16,
+      }}
+    >
+      <div
+        style={{
+          fontSize: 14,
+          fontWeight: 600,
+          color: "var(--t1)",
+          marginBottom: 16,
+        }}
+      >
+        {title}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function Field({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div>
+      <label
+        style={{
+          display: "block",
+          fontSize: 11,
+          fontWeight: 500,
+          color: "var(--t2)",
+          marginBottom: 4,
+        }}
+      >
+        {label}
+      </label>
+      {children}
+    </div>
+  );
+}
+
+const inputStyle: React.CSSProperties = {
+  width: "100%",
+  border: "1px solid var(--line)",
+  borderRadius: 6,
+  padding: "7px 10px",
+  fontSize: 13,
+  color: "var(--t1)",
+  background: "var(--bg)",
+  outline: "none",
+};
+
+// ── main component ─────────────────────────────────────────────────────────
 
 export default function GruposView({
   groups,
   profesores,
-  directorEmail,
 }: {
   groups: Group[];
   profesores: Profesor[];
-  directorEmail: string;
 }) {
   const router = useRouter();
   const [panel, setPanel] = useState<"none" | "grupo" | "profesor">("none");
   const [isPending, startTransition] = useTransition();
 
-  const [groupForm, setGroupForm] = useState(EMPTY_GROUP_FORM);
+  const [groupForm, setGroupForm] = useState(EMPTY_GROUP);
   const [groupError, setGroupError] = useState<string | null>(null);
 
-  const [profesorForm, setProfesorForm] = useState(EMPTY_PROFESOR_FORM);
+  const [profesorForm, setProfesorForm] = useState(EMPTY_PROFESOR);
   const [profesorError, setProfesorError] = useState<string | null>(null);
 
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -78,8 +177,8 @@ export default function GruposView({
 
   function closePanel() {
     setPanel("none");
-    setGroupForm(EMPTY_GROUP_FORM);
-    setProfesorForm(EMPTY_PROFESOR_FORM);
+    setGroupForm(EMPTY_GROUP);
+    setProfesorForm(EMPTY_PROFESOR);
     setGroupError(null);
     setProfesorError(null);
   }
@@ -144,342 +243,545 @@ export default function GruposView({
   }
 
   return (
-    <main className="min-h-screen bg-gray-50">
-      <nav className="border-b bg-white px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-6">
-          <h1 className="text-lg font-bold text-gray-900">AcademyOS</h1>
-          <a
-            href="/dashboard"
-            className="text-sm text-gray-500 hover:text-gray-900"
+    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+      {/* Topbar */}
+      <div
+        style={{
+          height: 54,
+          borderBottom: "1px solid var(--line)",
+          display: "flex",
+          alignItems: "center",
+          padding: "0 28px",
+          justifyContent: "space-between",
+          flexShrink: 0,
+          background: "var(--bg)",
+        }}
+      >
+        <span style={{ fontWeight: 600, fontSize: 16, color: "var(--t1)" }}>
+          Grupos
+        </span>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button
+            onClick={() => openPanel("profesor")}
+            style={{
+              fontSize: 12.5,
+              color: "var(--t2)",
+              border: "1px solid var(--line)",
+              borderRadius: 6,
+              padding: "5px 12px",
+              background: "transparent",
+              cursor: "pointer",
+            }}
           >
-            Dashboard
-          </a>
-          <span className="text-sm font-medium text-gray-900">Grupos</span>
+            + Nuevo profesor
+          </button>
+          <button
+            onClick={() => openPanel("grupo")}
+            style={{
+              fontSize: 12.5,
+              fontWeight: 500,
+              color: "#fff",
+              border: "none",
+              borderRadius: 6,
+              padding: "5px 14px",
+              background: "var(--accent)",
+              cursor: "pointer",
+            }}
+          >
+            + Nuevo grupo
+          </button>
         </div>
-        <div className="flex items-center gap-4">
-          <span className="text-sm text-gray-500">{directorEmail}</span>
-          <form action={logout}>
-            <button
-              type="submit"
-              className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
-            >
-              Cerrar sesión
-            </button>
-          </form>
-        </div>
-      </nav>
+      </div>
 
-      <div className="mx-auto max-w-4xl px-6 py-10">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-2xl font-bold text-gray-900">Grupos</h2>
-          <div className="flex gap-2">
-            <button
-              onClick={() => openPanel("profesor")}
-              className="rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
-            >
-              + Nuevo profesor
-            </button>
-            <button
-              onClick={() => openPanel("grupo")}
-              className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
-            >
-              + Nuevo grupo
-            </button>
-          </div>
-        </div>
+      {/* Scrollable content */}
+      <div style={{ flex: 1, overflowY: "auto" }}>
+        {/* Forms */}
+        {(panel === "grupo" || panel === "profesor") && (
+          <div style={{ padding: "20px 28px 0" }}>
+            {panel === "grupo" && (
+              <PanelCard title="Nuevo grupo">
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr 1fr",
+                    gap: 14,
+                  }}
+                >
+                  <div style={{ gridColumn: "1 / -1" }}>
+                    <Field label="Nombre">
+                      <input
+                        type="text"
+                        value={groupForm.name}
+                        onChange={(e) =>
+                          setGroupForm((f) => ({ ...f, name: e.target.value }))
+                        }
+                        placeholder="Ej: Avanzado — Lunes y Miércoles"
+                        style={inputStyle}
+                      />
+                    </Field>
+                  </div>
 
-        {/* Create group panel */}
-        {panel === "grupo" && (
-          <div className="mb-6 bg-white rounded-lg border border-gray-200 p-5">
-            <h3 className="text-sm font-semibold text-gray-900 mb-4">
-              Nuevo grupo
-            </h3>
-            <div className="grid gap-4">
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  Nombre
-                </label>
-                <input
-                  type="text"
-                  value={groupForm.name}
-                  onChange={(e) =>
-                    setGroupForm((f) => ({ ...f, name: e.target.value }))
-                  }
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Ej: Avanzado — Lunes y Miércoles"
-                />
-              </div>
+                  <div style={{ gridColumn: "1 / -1" }}>
+                    <Field label="Días">
+                      <div style={{ display: "flex", gap: 6, marginTop: 2 }}>
+                        {DAYS.map((d) => (
+                          <button
+                            key={d.key}
+                            type="button"
+                            onClick={() => toggleDay(d.key)}
+                            style={{
+                              width: 34,
+                              height: 34,
+                              borderRadius: "50%",
+                              border: "none",
+                              fontSize: 12,
+                              fontWeight: 600,
+                              cursor: "pointer",
+                              transition: "all 0.12s",
+                              background: groupForm.days.includes(d.key)
+                                ? "var(--accent)"
+                                : "var(--bg2)",
+                              color: groupForm.days.includes(d.key)
+                                ? "#fff"
+                                : "var(--t2)",
+                            }}
+                          >
+                            {d.short}
+                          </button>
+                        ))}
+                      </div>
+                    </Field>
+                  </div>
 
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-2">
-                  Días
-                </label>
-                <div className="flex gap-2">
-                  {DAYS.map((d) => (
-                    <button
-                      key={d.key}
-                      type="button"
-                      onClick={() => toggleDay(d.key)}
-                      className={`w-9 h-9 rounded-full text-xs font-semibold transition-colors ${
-                        groupForm.days.includes(d.key)
-                          ? "bg-blue-600 text-white"
-                          : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                      }`}
-                    >
-                      {d.short}
-                    </button>
-                  ))}
+                  <Field label="Hora inicio">
+                    <input
+                      type="time"
+                      value={groupForm.time_start}
+                      onChange={(e) =>
+                        setGroupForm((f) => ({
+                          ...f,
+                          time_start: e.target.value,
+                        }))
+                      }
+                      style={inputStyle}
+                    />
+                  </Field>
+
+                  <Field label="Hora fin">
+                    <input
+                      type="time"
+                      value={groupForm.time_end}
+                      onChange={(e) =>
+                        setGroupForm((f) => ({
+                          ...f,
+                          time_end: e.target.value,
+                        }))
+                      }
+                      style={inputStyle}
+                    />
+                  </Field>
+
+                  <div style={{ gridColumn: "1 / -1" }}>
+                    <Field label="Profesor">
+                      <select
+                        value={groupForm.profesor_id}
+                        onChange={(e) =>
+                          setGroupForm((f) => ({
+                            ...f,
+                            profesor_id: e.target.value,
+                          }))
+                        }
+                        style={inputStyle}
+                      >
+                        <option value="">Sin asignar</option>
+                        {profesores.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.full_name}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                  </div>
                 </div>
-              </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
-                    Hora inicio
-                  </label>
-                  <input
-                    type="time"
-                    value={groupForm.time_start}
-                    onChange={(e) =>
-                      setGroupForm((f) => ({
-                        ...f,
-                        time_start: e.target.value,
-                      }))
-                    }
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
+                {groupError && (
+                  <p
+                    style={{
+                      marginTop: 12,
+                      fontSize: 12.5,
+                      color: "var(--err)",
+                      background: "#fef2f2",
+                      borderRadius: 6,
+                      padding: "8px 12px",
+                    }}
+                  >
+                    {groupError}
+                  </p>
+                )}
+
+                <div
+                  style={{
+                    display: "flex",
+                    gap: 8,
+                    justifyContent: "flex-end",
+                    marginTop: 16,
+                  }}
+                >
+                  <button
+                    onClick={closePanel}
+                    style={{
+                      fontSize: 12.5,
+                      color: "var(--t2)",
+                      border: "1px solid var(--line)",
+                      borderRadius: 6,
+                      padding: "6px 14px",
+                      background: "transparent",
+                      cursor: "pointer",
+                    }}
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={handleCrearGrupo}
+                    disabled={isPending}
+                    style={{
+                      fontSize: 12.5,
+                      fontWeight: 500,
+                      color: "#fff",
+                      border: "none",
+                      borderRadius: 6,
+                      padding: "6px 16px",
+                      background: "var(--accent)",
+                      cursor: "pointer",
+                      opacity: isPending ? 0.6 : 1,
+                    }}
+                  >
+                    {isPending ? "Guardando…" : "Crear grupo"}
+                  </button>
                 </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
-                    Hora fin
-                  </label>
-                  <input
-                    type="time"
-                    value={groupForm.time_end}
-                    onChange={(e) =>
-                      setGroupForm((f) => ({
-                        ...f,
-                        time_end: e.target.value,
-                      }))
-                    }
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
+              </PanelCard>
+            )}
+
+            {panel === "profesor" && (
+              <PanelCard title="Nuevo profesor">
+                <div style={{ display: "grid", gap: 14 }}>
+                  <Field label="Nombre completo">
+                    <input
+                      type="text"
+                      value={profesorForm.full_name}
+                      onChange={(e) =>
+                        setProfesorForm((f) => ({
+                          ...f,
+                          full_name: e.target.value,
+                        }))
+                      }
+                      placeholder="Ana García"
+                      style={inputStyle}
+                    />
+                  </Field>
+                  <Field label="Email">
+                    <input
+                      type="email"
+                      value={profesorForm.email}
+                      onChange={(e) =>
+                        setProfesorForm((f) => ({
+                          ...f,
+                          email: e.target.value,
+                        }))
+                      }
+                      placeholder="ana@academia.com"
+                      style={inputStyle}
+                    />
+                  </Field>
+                  <Field label="Contraseña">
+                    <input
+                      type="password"
+                      value={profesorForm.password}
+                      onChange={(e) =>
+                        setProfesorForm((f) => ({
+                          ...f,
+                          password: e.target.value,
+                        }))
+                      }
+                      style={inputStyle}
+                    />
+                  </Field>
                 </div>
-              </div>
 
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  Profesor
-                </label>
-                <select
-                  value={groupForm.profesor_id}
-                  onChange={(e) =>
-                    setGroupForm((f) => ({
-                      ...f,
-                      profesor_id: e.target.value,
-                    }))
-                  }
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                {profesorError && (
+                  <p
+                    style={{
+                      marginTop: 12,
+                      fontSize: 12.5,
+                      color: "var(--err)",
+                      background: "#fef2f2",
+                      borderRadius: 6,
+                      padding: "8px 12px",
+                    }}
+                  >
+                    {profesorError}
+                  </p>
+                )}
+
+                <div
+                  style={{
+                    display: "flex",
+                    gap: 8,
+                    justifyContent: "flex-end",
+                    marginTop: 16,
+                  }}
                 >
-                  <option value="">Sin asignar</option>
-                  {profesores.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.full_name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {groupError && (
-                <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">
-                  {groupError}
-                </p>
-              )}
-
-              <div className="flex gap-2 justify-end">
-                <button
-                  onClick={closePanel}
-                  className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={handleCrearGrupo}
-                  disabled={isPending}
-                  className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-                >
-                  {isPending ? "Guardando..." : "Crear grupo"}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Create profesor panel */}
-        {panel === "profesor" && (
-          <div className="mb-6 bg-white rounded-lg border border-gray-200 p-5">
-            <h3 className="text-sm font-semibold text-gray-900 mb-4">
-              Nuevo profesor
-            </h3>
-            <div className="grid gap-4">
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  Nombre completo
-                </label>
-                <input
-                  type="text"
-                  value={profesorForm.full_name}
-                  onChange={(e) =>
-                    setProfesorForm((f) => ({
-                      ...f,
-                      full_name: e.target.value,
-                    }))
-                  }
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Ana García"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  Email
-                </label>
-                <input
-                  type="email"
-                  value={profesorForm.email}
-                  onChange={(e) =>
-                    setProfesorForm((f) => ({ ...f, email: e.target.value }))
-                  }
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="ana@academia.com"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  Contraseña
-                </label>
-                <input
-                  type="password"
-                  value={profesorForm.password}
-                  onChange={(e) =>
-                    setProfesorForm((f) => ({
-                      ...f,
-                      password: e.target.value,
-                    }))
-                  }
-                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              {profesorError && (
-                <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">
-                  {profesorError}
-                </p>
-              )}
-
-              <div className="flex gap-2 justify-end">
-                <button
-                  onClick={closePanel}
-                  className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={handleCrearProfesor}
-                  disabled={isPending}
-                  className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-                >
-                  {isPending ? "Guardando..." : "Crear profesor"}
-                </button>
-              </div>
-            </div>
+                  <button
+                    onClick={closePanel}
+                    style={{
+                      fontSize: 12.5,
+                      color: "var(--t2)",
+                      border: "1px solid var(--line)",
+                      borderRadius: 6,
+                      padding: "6px 14px",
+                      background: "transparent",
+                      cursor: "pointer",
+                    }}
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={handleCrearProfesor}
+                    disabled={isPending}
+                    style={{
+                      fontSize: 12.5,
+                      fontWeight: 500,
+                      color: "#fff",
+                      border: "none",
+                      borderRadius: 6,
+                      padding: "6px 16px",
+                      background: "var(--accent)",
+                      cursor: "pointer",
+                      opacity: isPending ? 0.6 : 1,
+                    }}
+                  >
+                    {isPending ? "Guardando…" : "Crear profesor"}
+                  </button>
+                </div>
+              </PanelCard>
+            )}
           </div>
         )}
 
         {/* Delete error */}
         {deleteError && (
-          <div className="mb-4 text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2 border border-red-200">
+          <div
+            style={{
+              margin: "16px 28px 0",
+              fontSize: 12.5,
+              color: "var(--err)",
+              background: "#fef2f2",
+              border: "1px solid #fecaca",
+              borderRadius: 6,
+              padding: "10px 14px",
+            }}
+          >
             {deleteError}
           </div>
         )}
 
-        {/* Groups list */}
+        {/* Table */}
         {groups.length === 0 ? (
-          <p className="text-sm text-gray-500">No hay grupos creados todavía.</p>
+          <p
+            style={{
+              padding: "40px 28px",
+              color: "var(--t3)",
+              fontSize: 13,
+            }}
+          >
+            No hay grupos creados todavía.
+          </p>
         ) : (
-          <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-            <div className="grid grid-cols-[1fr_auto_auto_11rem_2rem] gap-4 px-4 py-2 bg-gray-50 border-b">
-              <span className="text-xs font-medium text-gray-500 uppercase">
-                Grupo
-              </span>
-              <span className="text-xs font-medium text-gray-500 uppercase">
-                Días
-              </span>
-              <span className="text-xs font-medium text-gray-500 uppercase">
-                Horario
-              </span>
-              <span className="text-xs font-medium text-gray-500 uppercase">
-                Profesor
-              </span>
-              <span />
-            </div>
-            {groups.map((group) => (
-              <div
-                key={`${group.id}-${group.profesor_id ?? "none"}`}
-                className="grid grid-cols-[1fr_auto_auto_11rem_2rem] gap-4 items-center px-4 py-3 border-b last:border-0"
-              >
-                <span className="text-sm font-medium text-gray-900">
-                  {group.name}
-                </span>
-
-                <div className="flex gap-1">
-                  {DAYS.map((d) => (
-                    <span
-                      key={d.key}
-                      className={`w-6 h-6 rounded-full text-xs flex items-center justify-center font-semibold ${
-                        group.days.includes(d.key)
-                          ? "bg-blue-100 text-blue-700"
-                          : "bg-gray-100 text-gray-300"
-                      }`}
-                    >
-                      {d.short}
-                    </span>
-                  ))}
-                </div>
-
-                <span className="text-sm text-gray-600 whitespace-nowrap">
-                  {group.time_start && group.time_end
-                    ? `${group.time_start.slice(0, 5)} – ${group.time_end.slice(0, 5)}`
-                    : "—"}
-                </span>
-
-                <select
-                  defaultValue={group.profesor_id ?? ""}
-                  onChange={(e) =>
-                    handleChangeProfesor(group.id, e.target.value)
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead>
+              <tr style={{ background: "var(--bg2)" }}>
+                {["Grupo", "Días", "Horario", "Profesor", ""].map((col) => (
+                  <th
+                    key={col}
+                    style={{
+                      textAlign: "left",
+                      padding: "9px 20px",
+                      fontSize: 11,
+                      fontWeight: 600,
+                      color: "var(--t3)",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.06em",
+                      borderBottom: "1px solid var(--line)",
+                    }}
+                  >
+                    {col}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {groups.map((group) => (
+                <GroupRow
+                  key={`${group.id}-${group.profesor_id ?? "none"}`}
+                  group={group}
+                  profesores={profesores}
+                  deleting={deletingId === group.id}
+                  onDelete={() => handleEliminar(group.id)}
+                  onChangeProfesor={(pid) =>
+                    handleChangeProfesor(group.id, pid)
                   }
-                  className="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">Sin asignar</option>
-                  {profesores.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.full_name}
-                    </option>
-                  ))}
-                </select>
-
-                <button
-                  onClick={() => handleEliminar(group.id)}
-                  disabled={deletingId === group.id}
-                  className="text-gray-400 hover:text-red-500 disabled:opacity-30 text-xl leading-none"
-                  title="Eliminar grupo"
-                >
-                  ×
-                </button>
-              </div>
-            ))}
-          </div>
+                />
+              ))}
+            </tbody>
+          </table>
         )}
       </div>
-    </main>
+    </div>
+  );
+}
+
+function GroupRow({
+  group,
+  profesores,
+  deleting,
+  onDelete,
+  onChangeProfesor,
+}: {
+  group: Group;
+  profesores: Profesor[];
+  deleting: boolean;
+  onDelete: () => void;
+  onChangeProfesor: (id: string) => void;
+}) {
+  const [hovered, setHovered] = useState(false);
+
+  return (
+    <tr
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        background: hovered ? "var(--bg2)" : "transparent",
+        transition: "background 0.1s",
+      }}
+    >
+      <td
+        style={{
+          padding: "11px 20px",
+          borderBottom: "1px solid var(--line)",
+          verticalAlign: "middle",
+        }}
+      >
+        <span style={{ fontWeight: 500, fontSize: 13, color: "var(--t1)" }}>
+          {group.name}
+        </span>
+      </td>
+
+      <td
+        style={{
+          padding: "11px 20px",
+          borderBottom: "1px solid var(--line)",
+          verticalAlign: "middle",
+        }}
+      >
+        <div style={{ display: "flex", gap: 3 }}>
+          {DAYS.map((d) => (
+            <span
+              key={d.key}
+              style={{
+                width: 22,
+                height: 22,
+                borderRadius: "50%",
+                fontSize: 10,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontWeight: 600,
+                background: group.days.includes(d.key)
+                  ? "var(--accent-light)"
+                  : "var(--bg2)",
+                color: group.days.includes(d.key)
+                  ? "var(--accent)"
+                  : "var(--t3)",
+              }}
+            >
+              {d.short}
+            </span>
+          ))}
+        </div>
+      </td>
+
+      <td
+        style={{
+          padding: "11px 20px",
+          borderBottom: "1px solid var(--line)",
+          verticalAlign: "middle",
+          color: "var(--t3)",
+          fontSize: 12,
+          whiteSpace: "nowrap",
+        }}
+      >
+        {group.time_start && group.time_end
+          ? `${group.time_start.slice(0, 5)} – ${group.time_end.slice(0, 5)}`
+          : "—"}
+      </td>
+
+      <td
+        style={{
+          padding: "11px 20px",
+          borderBottom: "1px solid var(--line)",
+          verticalAlign: "middle",
+          minWidth: 160,
+        }}
+      >
+        <select
+          defaultValue={group.profesor_id ?? ""}
+          onChange={(e) => onChangeProfesor(e.target.value)}
+          style={{
+            border: "1px solid var(--line)",
+            borderRadius: 6,
+            padding: "5px 8px",
+            fontSize: 12.5,
+            color: "var(--t1)",
+            background: "var(--bg)",
+            outline: "none",
+            width: "100%",
+          }}
+        >
+          <option value="">Sin asignar</option>
+          {profesores.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.full_name}
+            </option>
+          ))}
+        </select>
+      </td>
+
+      <td
+        style={{
+          padding: "11px 20px",
+          borderBottom: "1px solid var(--line)",
+          verticalAlign: "middle",
+          textAlign: "right",
+        }}
+      >
+        <button
+          onClick={onDelete}
+          disabled={deleting}
+          style={{
+            fontSize: 18,
+            lineHeight: 1,
+            color: hovered ? "var(--err)" : "var(--t3)",
+            background: "none",
+            border: "none",
+            cursor: "pointer",
+            opacity: deleting ? 0.3 : 1,
+            transition: "color 0.1s",
+          }}
+          title="Eliminar grupo"
+        >
+          ×
+        </button>
+      </td>
+    </tr>
   );
 }

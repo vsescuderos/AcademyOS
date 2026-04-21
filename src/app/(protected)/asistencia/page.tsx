@@ -21,10 +21,5 @@ export default async function AsistenciaPage() {
     .eq("profesor_id", user.id)
     .order("name");
 
-  return (
-    <AsistenciaView
-      groups={groups ?? []}
-      profesorEmail={user.email ?? ""}
-    />
-  );
+  return <AsistenciaView groups={groups ?? []} />;
 }

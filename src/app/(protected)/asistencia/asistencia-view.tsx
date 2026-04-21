@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { logout } from "@/actions/auth";
 import { confirmarAsistencia } from "@/actions/asistencia";
 
 type Group = { id: string; name: string };
@@ -14,13 +13,7 @@ type GroupState =
   | { status: "pending"; students: Student[] }
   | { status: "confirmed"; students: Student[]; records: AttendanceMap };
 
-export default function AsistenciaView({
-  groups,
-  profesorEmail,
-}: {
-  groups: Group[];
-  profesorEmail: string;
-}) {
+export default function AsistenciaView({ groups }: { groups: Group[] }) {
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [groupState, setGroupState] = useState<GroupState>({ status: "idle" });
   const [attendance, setAttendance] = useState<AttendanceMap>({});
@@ -37,7 +30,6 @@ export default function AsistenciaView({
     const supabase = createClient();
     const today = new Date().toISOString().split("T")[0];
 
-    // Load students
     const { data: gsData } = await supabase
       .from("group_students")
       .select("students(id, full_name)")
@@ -47,7 +39,6 @@ export default function AsistenciaView({
       .map((d) => (d as { students: Student }).students)
       .filter(Boolean);
 
-    // Check if today's session already exists
     const { data: session } = await supabase
       .from("attendance_sessions")
       .select("id")
@@ -60,7 +51,6 @@ export default function AsistenciaView({
       return;
     }
 
-    // Load existing records
     const { data: records } = await supabase
       .from("attendance_records")
       .select("student_id, status")
@@ -107,47 +97,59 @@ export default function AsistenciaView({
     groupState.students.every((s) => attendance[s.id]);
 
   return (
-    <main className="min-h-screen bg-gray-50">
-      <nav className="border-b bg-white px-6 py-4 flex items-center justify-between">
-        <h1 className="text-lg font-bold text-gray-900">AcademyOS</h1>
-        <div className="flex items-center gap-4">
-          <span className="text-sm text-gray-500">{profesorEmail}</span>
-          <form action={logout}>
-            <button
-              type="submit"
-              className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
-            >
-              Cerrar sesión
-            </button>
-          </form>
-        </div>
-      </nav>
+    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+      {/* Topbar */}
+      <div
+        style={{
+          height: 54,
+          borderBottom: "1px solid var(--line)",
+          display: "flex",
+          alignItems: "center",
+          padding: "0 28px",
+          justifyContent: "space-between",
+          flexShrink: 0,
+          background: "var(--bg)",
+        }}
+      >
+        <span style={{ fontWeight: 600, fontSize: 16, color: "var(--t1)" }}>
+          Asistencia
+        </span>
+        <span
+          style={{ fontSize: 12.5, color: "var(--t3)", textTransform: "capitalize" }}
+        >
+          {today}
+        </span>
+      </div>
 
-      <div className="mx-auto max-w-2xl px-6 py-10">
-        <p className="text-sm text-gray-500 mb-1 capitalize">{today}</p>
-        <h2 className="text-2xl font-bold text-gray-900 mb-6">Asistencia</h2>
-
+      {/* Content */}
+      <div style={{ flex: 1, overflowY: "auto", padding: "24px 28px" }}>
         {/* Group list */}
-        <div className="mb-8">
-          <p className="text-xs font-medium text-gray-500 uppercase mb-3">
+        <div style={{ marginBottom: 24 }}>
+          <div
+            style={{
+              fontSize: 10,
+              fontWeight: 600,
+              color: "var(--t3)",
+              textTransform: "uppercase",
+              letterSpacing: "0.08em",
+              marginBottom: 10,
+            }}
+          >
             Mis grupos
-          </p>
+          </div>
           {groups.length === 0 ? (
-            <p className="text-sm text-gray-500">No tienes grupos asignados.</p>
+            <p style={{ fontSize: 13, color: "var(--t3)" }}>
+              No tienes grupos asignados.
+            </p>
           ) : (
-            <div className="flex flex-col gap-2">
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               {groups.map((g) => (
-                <button
+                <GroupButton
                   key={g.id}
+                  group={g}
+                  isSelected={selectedGroupId === g.id}
                   onClick={() => selectGroup(g.id)}
-                  className={`text-left px-4 py-3 rounded-lg border text-sm font-medium transition-colors ${
-                    selectedGroupId === g.id
-                      ? "bg-blue-50 border-blue-400 text-blue-700"
-                      : "bg-white border-gray-200 text-gray-700 hover:border-gray-300"
-                  }`}
-                >
-                  {g.name}
-                </button>
+                />
               ))}
             </div>
           )}
@@ -155,110 +157,231 @@ export default function AsistenciaView({
 
         {/* Students panel */}
         {groupState.status === "loading" && (
-          <p className="text-sm text-gray-400">Cargando...</p>
+          <p style={{ fontSize: 13, color: "var(--t3)" }}>Cargando…</p>
         )}
 
         {(groupState.status === "pending" ||
           groupState.status === "confirmed") && (
           <>
             {groupState.students.length === 0 ? (
-              <p className="text-sm text-gray-500">
+              <p style={{ fontSize: 13, color: "var(--t3)" }}>
                 No hay alumnos en este grupo.
               </p>
             ) : (
               <>
                 {groupState.status === "confirmed" && (
-                  <div className="mb-3 flex items-center gap-2 text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
-                    <span>Asistencia confirmada para hoy</span>
+                  <div
+                    style={{
+                      marginBottom: 12,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                      fontSize: 12.5,
+                      color: "var(--ok)",
+                      background: "var(--ok-dim)",
+                      border: "1px solid var(--accent-border)",
+                      borderRadius: 6,
+                      padding: "8px 14px",
+                    }}
+                  >
+                    Asistencia confirmada para hoy
                   </div>
                 )}
 
-                <div className="bg-white rounded-lg border border-gray-200 overflow-hidden mb-4">
-                  <div className="grid grid-cols-[1fr_6rem_6rem] px-4 py-2 bg-gray-50 border-b">
-                    <span className="text-xs font-medium text-gray-500 uppercase">
-                      Alumno
-                    </span>
-                    <span className="text-xs font-medium text-gray-500 uppercase text-center">
-                      Presente
-                    </span>
-                    <span className="text-xs font-medium text-gray-500 uppercase text-center">
-                      Ausente
-                    </span>
-                  </div>
+                <table
+                  style={{ width: "100%", borderCollapse: "collapse" }}
+                >
+                  <thead>
+                    <tr style={{ background: "var(--bg2)" }}>
+                      {["Alumno", "Presente", "Ausente"].map((col) => (
+                        <th
+                          key={col}
+                          style={{
+                            textAlign: col === "Alumno" ? "left" : "center",
+                            padding: "9px 20px",
+                            fontSize: 11,
+                            fontWeight: 600,
+                            color: "var(--t3)",
+                            textTransform: "uppercase",
+                            letterSpacing: "0.06em",
+                            borderBottom: "1px solid var(--line)",
+                          }}
+                        >
+                          {col}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {groupState.students.map((student) => {
+                      const isConfirmed = groupState.status === "confirmed";
+                      const savedStatus = isConfirmed
+                        ? groupState.records[student.id]
+                        : undefined;
+                      const currentStatus = isConfirmed
+                        ? savedStatus
+                        : attendance[student.id];
 
-                  {groupState.students.map((student) => {
-                    const isConfirmed = groupState.status === "confirmed";
-                    const savedStatus = isConfirmed
-                      ? groupState.records[student.id]
-                      : undefined;
-                    const currentStatus = isConfirmed
-                      ? savedStatus
-                      : attendance[student.id];
-
-                    return (
-                      <div
-                        key={student.id}
-                        className="grid grid-cols-[1fr_6rem_6rem] items-center px-4 py-3 border-b last:border-0"
-                      >
-                        <span className="text-sm text-gray-800">
-                          {student.full_name}
-                        </span>
-                        <div className="flex justify-center">
-                          <input
-                            type="radio"
-                            name={`a-${student.id}`}
-                            disabled={isConfirmed}
-                            checked={currentStatus === "present"}
-                            onChange={() =>
-                              setAttendance((a) => ({
-                                ...a,
-                                [student.id]: "present",
-                              }))
-                            }
-                            className="w-4 h-4 accent-blue-600 disabled:opacity-60"
-                          />
-                        </div>
-                        <div className="flex justify-center">
-                          <input
-                            type="radio"
-                            name={`a-${student.id}`}
-                            disabled={isConfirmed}
-                            checked={currentStatus === "absent"}
-                            onChange={() =>
-                              setAttendance((a) => ({
-                                ...a,
-                                [student.id]: "absent",
-                              }))
-                            }
-                            className="w-4 h-4 accent-red-500 disabled:opacity-60"
-                          />
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
+                      return (
+                        <StudentRow
+                          key={student.id}
+                          student={student}
+                          currentStatus={currentStatus}
+                          disabled={isConfirmed}
+                          onChange={(val) =>
+                            setAttendance((a) => ({
+                              ...a,
+                              [student.id]: val,
+                            }))
+                          }
+                        />
+                      );
+                    })}
+                  </tbody>
+                </table>
 
                 {groupState.status === "pending" && (
-                  <>
+                  <div style={{ marginTop: 16 }}>
                     {saveError && (
-                      <p className="mb-3 text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">
+                      <p
+                        style={{
+                          marginBottom: 10,
+                          fontSize: 12.5,
+                          color: "var(--err)",
+                          background: "#fef2f2",
+                          borderRadius: 6,
+                          padding: "8px 14px",
+                        }}
+                      >
                         {saveError}
                       </p>
                     )}
                     <button
                       onClick={handleConfirmar}
                       disabled={!allMarked || saving}
-                      className="w-full py-2.5 rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      style={{
+                        width: "100%",
+                        padding: "10px",
+                        borderRadius: 6,
+                        fontSize: 13,
+                        fontWeight: 500,
+                        color: "#fff",
+                        background: "var(--accent)",
+                        border: "none",
+                        cursor: allMarked && !saving ? "pointer" : "not-allowed",
+                        opacity: !allMarked || saving ? 0.5 : 1,
+                        transition: "opacity 0.15s",
+                      }}
                     >
-                      {saving ? "Guardando..." : "Confirmar asistencia alumnos"}
+                      {saving ? "Guardando…" : "Confirmar asistencia"}
                     </button>
-                  </>
+                  </div>
                 )}
               </>
             )}
           </>
         )}
       </div>
-    </main>
+    </div>
+  );
+}
+
+function GroupButton({
+  group,
+  isSelected,
+  onClick,
+}: {
+  group: Group;
+  isSelected: boolean;
+  onClick: () => void;
+}) {
+  const [hovered, setHovered] = useState(false);
+  return (
+    <button
+      onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        textAlign: "left",
+        padding: "10px 14px",
+        borderRadius: 6,
+        fontSize: 13,
+        fontWeight: isSelected ? 500 : 400,
+        cursor: "pointer",
+        border: `1px solid ${isSelected ? "var(--accent-border)" : hovered ? "#d1d5db" : "var(--line)"}`,
+        background: isSelected ? "var(--accent-light)" : "var(--bg)",
+        color: isSelected ? "var(--accent)" : "var(--t1)",
+        transition: "all 0.12s",
+      }}
+    >
+      {group.name}
+    </button>
+  );
+}
+
+function StudentRow({
+  student,
+  currentStatus,
+  disabled,
+  onChange,
+}: {
+  student: Student;
+  currentStatus: "present" | "absent" | undefined;
+  disabled: boolean;
+  onChange: (val: "present" | "absent") => void;
+}) {
+  const [hovered, setHovered] = useState(false);
+  return (
+    <tr
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        background: hovered ? "var(--bg2)" : "transparent",
+        transition: "background 0.1s",
+      }}
+    >
+      <td
+        style={{
+          padding: "11px 20px",
+          borderBottom: "1px solid var(--line)",
+          fontSize: 13,
+          color: "var(--t1)",
+        }}
+      >
+        {student.full_name}
+      </td>
+      <td
+        style={{
+          padding: "11px 20px",
+          borderBottom: "1px solid var(--line)",
+          textAlign: "center",
+        }}
+      >
+        <input
+          type="radio"
+          name={`a-${student.id}`}
+          disabled={disabled}
+          checked={currentStatus === "present"}
+          onChange={() => onChange("present")}
+          style={{ width: 15, height: 15, accentColor: "var(--accent)", cursor: disabled ? "default" : "pointer" }}
+        />
+      </td>
+      <td
+        style={{
+          padding: "11px 20px",
+          borderBottom: "1px solid var(--line)",
+          textAlign: "center",
+        }}
+      >
+        <input
+          type="radio"
+          name={`a-${student.id}`}
+          disabled={disabled}
+          checked={currentStatus === "absent"}
+          onChange={() => onChange("absent")}
+          style={{ width: 15, height: 15, accentColor: "var(--err)", cursor: disabled ? "default" : "pointer" }}
+        />
+      </td>
+    </tr>
   );
 }
