@@ -160,6 +160,28 @@ export default function GruposView({
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
+  const [search, setSearch] = useState("");
+  const [showSinProfesor, setShowSinProfesor] = useState(false);
+
+  const filteredGroups = groups.filter((g) => {
+    if (showSinProfesor) return !g.profesor_id;
+    if (search.trim()) {
+      const prof = profesores.find((p) => p.id === g.profesor_id);
+      return (prof?.full_name ?? "").toLowerCase().includes(search.toLowerCase().trim());
+    }
+    return true;
+  });
+
+  function handleSearch(val: string) {
+    setSearch(val);
+    if (val.trim()) setShowSinProfesor(false);
+  }
+
+  function toggleSinProfesor() {
+    if (!showSinProfesor) setSearch("");
+    setShowSinProfesor((v) => !v);
+  }
+
   function toggleDay(day: string) {
     setGroupForm((f) => ({
       ...f,
@@ -273,6 +295,54 @@ export default function GruposView({
             + Nuevo grupo
           </button>
         </div>
+      </div>
+
+      {/* Filter bar */}
+      <div
+        style={{
+          padding: "8px 28px",
+          borderBottom: "1px solid var(--line)",
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          flexShrink: 0,
+          background: "var(--bg)",
+        }}
+      >
+        <input
+          type="text"
+          placeholder="Buscar por profesor…"
+          value={search}
+          onChange={(e) => handleSearch(e.target.value)}
+          style={{
+            flex: 1,
+            maxWidth: 260,
+            border: "1px solid var(--line)",
+            borderRadius: 6,
+            padding: "6px 10px",
+            fontSize: 12.5,
+            color: "var(--t1)",
+            background: "var(--bg)",
+            outline: "none",
+          }}
+        />
+        <button
+          onClick={toggleSinProfesor}
+          style={{
+            fontSize: 12,
+            fontWeight: 500,
+            color: showSinProfesor ? "var(--accent)" : "var(--t2)",
+            background: showSinProfesor ? "var(--accent-light)" : "transparent",
+            border: `1px solid ${showSinProfesor ? "var(--accent-border)" : "var(--line)"}`,
+            borderRadius: 6,
+            padding: "5px 12px",
+            cursor: "pointer",
+            whiteSpace: "nowrap",
+            transition: "all 0.12s",
+          }}
+        >
+          Grupos sin profesor
+        </button>
       </div>
 
       {/* Scrollable content */}
@@ -491,14 +561,12 @@ export default function GruposView({
 
         {/* Table */}
         {groups.length === 0 ? (
-          <p
-            style={{
-              padding: "40px 28px",
-              color: "var(--t3)",
-              fontSize: 13,
-            }}
-          >
+          <p style={{ padding: "40px 28px", color: "var(--t3)", fontSize: 13 }}>
             No hay grupos creados todavía.
+          </p>
+        ) : filteredGroups.length === 0 ? (
+          <p style={{ padding: "40px 28px", color: "var(--t3)", fontSize: 13 }}>
+            No hay grupos que coincidan con el filtro.
           </p>
         ) : (
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -524,7 +592,7 @@ export default function GruposView({
               </tr>
             </thead>
             <tbody>
-              {groups.map((group) => (
+              {filteredGroups.map((group) => (
                 <GroupRow
                   key={`${group.id}-${group.profesor_id ?? "none"}`}
                   group={group}
