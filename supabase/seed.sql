@@ -53,11 +53,18 @@ VALUES
 ON CONFLICT (id) DO NOTHING;
 
 -- Perfiles
+-- DO UPDATE porque el trigger on_auth_user_created ya habrá insertado un perfil
+-- con role='director' al insertar auth.users arriba. Aquí corregimos los valores
+-- definitivos (rol, academia, nombre) para los usuarios de test.
 INSERT INTO profiles (id, academy_id, role, full_name, email)
 VALUES
   ('20000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', 'director', 'Director Test', 'director@academyos.test'),
   ('20000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000001', 'profesor', 'Profesor Test',  'profesor@academyos.test')
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT (id) DO UPDATE
+  SET role       = EXCLUDED.role,
+      academy_id = EXCLUDED.academy_id,
+      full_name  = EXCLUDED.full_name,
+      email      = EXCLUDED.email;
 
 -- Grupo de test asignado al profesor
 INSERT INTO groups (id, academy_id, profesor_id, name, days, time_start, time_end)
