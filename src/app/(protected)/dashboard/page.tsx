@@ -53,24 +53,7 @@ export default async function DashboardPage() {
         <div style={{ display: "flex", gap: 16 }}>
           <a
             href="/grupos"
-            style={{
-              display: "block",
-              padding: "20px 24px",
-              background: "var(--bg)",
-              border: "1px solid var(--line)",
-              borderRadius: 10,
-              textDecoration: "none",
-              minWidth: 200,
-              transition: "border-color 0.12s",
-            }}
-            onMouseEnter={(e) =>
-              ((e.currentTarget as HTMLElement).style.borderColor =
-                "var(--accent-border)")
-            }
-            onMouseLeave={(e) =>
-              ((e.currentTarget as HTMLElement).style.borderColor =
-                "var(--line)")
-            }
+            className="dashboard-card"
           >
             <div
               style={{

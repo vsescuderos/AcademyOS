@@ -30,3 +30,17 @@ body {
 
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 4px; }
+
+.dashboard-card {
+  display: block;
+  padding: 20px 24px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  text-decoration: none;
+  min-width: 200px;
+  transition: border-color 0.12s;
+}
+.dashboard-card:hover {
+  border-color: var(--accent-border);
+}
