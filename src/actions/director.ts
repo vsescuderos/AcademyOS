@@ -46,6 +46,21 @@ export async function crearGrupo(data: {
   const ctx = await getDirectorCtx();
   if (!ctx) return { error: "Sin permiso" };
 
+  if (data.profesor_id) {
+    const { data: profGroups } = await ctx.supabase
+      .from("groups")
+      .select("id, name, days, time_start, time_end")
+      .eq("academy_id", ctx.profile.academy_id)
+      .eq("profesor_id", data.profesor_id);
+
+    const newGroup: GroupSchedule = { id: "", name: data.name, days: data.days, time_start: data.time_start, time_end: data.time_end };
+    for (const g of profGroups ?? []) {
+      if (groupsConflict(newGroup, g as unknown as GroupSchedule)) {
+        return { error: `El profesor ya tiene "${g.name}" que entra en conflicto de horario.` };
+      }
+    }
+  }
+
   const { error } = await ctx.supabase.from("groups").insert({
     academy_id: ctx.profile.academy_id,
     name: data.name,
@@ -93,6 +108,29 @@ export async function actualizarProfesorGrupo(
 ): Promise<{ error?: string }> {
   const ctx = await getDirectorCtx();
   if (!ctx) return { error: "Sin permiso" };
+
+  if (profesorId) {
+    const { data: targetGroup } = await ctx.supabase
+      .from("groups")
+      .select("id, name, days, time_start, time_end")
+      .eq("id", groupId)
+      .single();
+
+    if (targetGroup) {
+      const { data: profGroups } = await ctx.supabase
+        .from("groups")
+        .select("id, name, days, time_start, time_end")
+        .eq("academy_id", ctx.profile.academy_id)
+        .eq("profesor_id", profesorId)
+        .neq("id", groupId);
+
+      for (const g of profGroups ?? []) {
+        if (groupsConflict(targetGroup as unknown as GroupSchedule, g as unknown as GroupSchedule)) {
+          return { error: `El profesor ya tiene "${g.name}" que entra en conflicto de horario.` };
+        }
+      }
+    }
+  }
 
   const { error } = await ctx.supabase
     .from("groups")

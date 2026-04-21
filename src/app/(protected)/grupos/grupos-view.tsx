@@ -40,36 +40,6 @@ const EMPTY_GROUP = {
 };
 // ── shared sub-components ──────────────────────────────────────────────────
 
-function Pill({
-  children,
-  variant = "neutral",
-}: {
-  children: React.ReactNode;
-  variant?: "neutral" | "active" | "green";
-}) {
-  const styles: Record<string, [string, string]> = {
-    neutral: ["#f3f4f6", "#6b7280"],
-    active: ["var(--ok-dim)", "var(--ok)"],
-    green: ["var(--ok-dim)", "var(--ok)"],
-  };
-  const [bg, color] = styles[variant] ?? styles.neutral;
-  return (
-    <span
-      style={{
-        fontSize: 11,
-        fontWeight: 500,
-        padding: "2px 8px",
-        borderRadius: 20,
-        background: bg,
-        color,
-        whiteSpace: "nowrap",
-      }}
-    >
-      {children}
-    </span>
-  );
-}
-
 function PanelCard({
   title,
   children,
@@ -242,8 +212,13 @@ export default function GruposView({
   }
 
   async function handleChangeProfesor(groupId: string, profesorId: string) {
-    await actualizarProfesorGrupo(groupId, profesorId);
-    router.refresh();
+    setDeleteError(null);
+    const result = await actualizarProfesorGrupo(groupId, profesorId);
+    if (result.error) {
+      setDeleteError(result.error);
+    } else {
+      router.refresh();
+    }
   }
 
   return (
