@@ -6,7 +6,7 @@ import { confirmarAsistencia } from "@/actions/asistencia";
 
 type Group = { id: string; name: string };
 type Student = { id: string; full_name: string };
-type AttendanceMap = Record<string, "present" | "absent">;
+type AttendanceMap = Record<string, "present" | "absent" | "late">;
 type GroupState =
   | { status: "idle" }
   | { status: "loading" }
@@ -58,7 +58,7 @@ export default function AsistenciaView({ groups }: { groups: Group[] }) {
 
     const recordsMap: AttendanceMap = {};
     for (const r of records ?? []) {
-      if (r.status === "present" || r.status === "absent") {
+      if (r.status === "present" || r.status === "absent" || r.status === "late") {
         recordsMap[r.student_id] = r.status;
       }
     }
@@ -193,7 +193,7 @@ export default function AsistenciaView({ groups }: { groups: Group[] }) {
                 >
                   <thead>
                     <tr style={{ background: "var(--bg2)" }}>
-                      {["Alumno", "Presente", "Ausente"].map((col) => (
+                      {["Alumno", "Presente", "Ausente", "Tarde"].map((col) => (
                         <th
                           key={col}
                           style={{
@@ -326,37 +326,26 @@ function StudentRow({
   onChange,
 }: {
   student: Student;
-  currentStatus: "present" | "absent" | undefined;
+  currentStatus: "present" | "absent" | "late" | undefined;
   disabled: boolean;
-  onChange: (val: "present" | "absent") => void;
+  onChange: (val: "present" | "absent" | "late") => void;
 }) {
   const [hovered, setHovered] = useState(false);
+  const tdBase: React.CSSProperties = {
+    padding: "11px 20px",
+    borderBottom: "1px solid var(--line)",
+    textAlign: "center",
+  };
   return (
     <tr
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      style={{
-        background: hovered ? "var(--bg2)" : "transparent",
-        transition: "background 0.1s",
-      }}
+      style={{ background: hovered ? "var(--bg2)" : "transparent", transition: "background 0.1s" }}
     >
-      <td
-        style={{
-          padding: "11px 20px",
-          borderBottom: "1px solid var(--line)",
-          fontSize: 13,
-          color: "var(--t1)",
-        }}
-      >
+      <td style={{ ...tdBase, textAlign: "left", fontSize: 13, color: "var(--t1)" }}>
         {student.full_name}
       </td>
-      <td
-        style={{
-          padding: "11px 20px",
-          borderBottom: "1px solid var(--line)",
-          textAlign: "center",
-        }}
-      >
+      <td style={tdBase}>
         <input
           type="radio"
           name={`a-${student.id}`}
@@ -366,13 +355,7 @@ function StudentRow({
           style={{ width: 15, height: 15, accentColor: "var(--accent)", cursor: disabled ? "default" : "pointer" }}
         />
       </td>
-      <td
-        style={{
-          padding: "11px 20px",
-          borderBottom: "1px solid var(--line)",
-          textAlign: "center",
-        }}
-      >
+      <td style={tdBase}>
         <input
           type="radio"
           name={`a-${student.id}`}
@@ -380,6 +363,16 @@ function StudentRow({
           checked={currentStatus === "absent"}
           onChange={() => onChange("absent")}
           style={{ width: 15, height: 15, accentColor: "var(--err)", cursor: disabled ? "default" : "pointer" }}
+        />
+      </td>
+      <td style={tdBase}>
+        <input
+          type="radio"
+          name={`a-${student.id}`}
+          disabled={disabled}
+          checked={currentStatus === "late"}
+          onChange={() => onChange("late")}
+          style={{ width: 15, height: 15, accentColor: "var(--warn)", cursor: disabled ? "default" : "pointer" }}
         />
       </td>
     </tr>

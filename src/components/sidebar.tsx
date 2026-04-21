@@ -130,6 +130,7 @@ export default function Sidebar({
     { href: "/grupos", label: "Grupos" },
     { href: "/profesores", label: "Profesores" },
     { href: "/alumnos", label: "Alumnos" },
+    { href: "/asistencia", label: "Asistencia" },
   ];
   const profesorNav = [{ href: "/asistencia", label: "Asistencia" }];
   const navItems = role === "profesor" ? profesorNav : directorNav;

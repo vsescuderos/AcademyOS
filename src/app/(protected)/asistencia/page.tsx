@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import AsistenciaView from "./asistencia-view";
+import DirectorAsistenciaView from "./director-asistencia-view";
 
 export default async function AsistenciaPage() {
   const supabase = await createClient();
@@ -13,7 +14,17 @@ export default async function AsistenciaPage() {
     .eq("id", user.id)
     .single();
 
-  if (!profile || profile.role !== "profesor") redirect("/dashboard");
+  if (!profile) redirect("/login");
+
+  if (profile.role === "director") {
+    const { data: groups } = await supabase
+      .from("groups")
+      .select("id, name")
+      .order("name");
+    return <DirectorAsistenciaView groups={groups ?? []} />;
+  }
+
+  if (profile.role !== "profesor") redirect("/dashboard");
 
   const DAY_KEYS = ["domingo", "lunes", "martes", "miercoles", "jueves", "viernes", "sabado"];
   const todayKey = DAY_KEYS[new Date().getDay()];

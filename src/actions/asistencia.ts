@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 
 export async function confirmarAsistencia(
   groupId: string,
-  attendance: Record<string, "present" | "absent">
+  attendance: Record<string, "present" | "absent" | "late">
 ): Promise<{ error?: string }> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
