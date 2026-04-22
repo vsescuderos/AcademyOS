@@ -49,7 +49,7 @@ El Profesor accede a la vista de uno de sus grupos y abre una sesión de asisten
 
 ### Demo visible
 1. Profesor inicia sesión → ve solo sus grupos asignados
-2. Abre "Grupo Avanzado — Lunes" → aparece lista de alumnos
+2. Abre uno de sus grupos → aparece lista de alumnos
 3. Marca: Ana → Presente, Luis → Ausente, Marta → Tarde
 4. Pulsa "Guardar asistencia" → confirmación en pantalla
 5. Director entra a la misma sesión → ve los mismos registros sin posibilidad de editar

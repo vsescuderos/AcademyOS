@@ -17,10 +17,10 @@ export default async function GruposPage() {
 
   if (!profile || profile.role !== "director") redirect("/dashboard");
 
-  const [{ data: groups }, { data: profesores }, { data: students }] = await Promise.all([
+  const [{ data: rawGroups }, { data: profesores }, { data: students }] = await Promise.all([
     supabase
       .from("groups")
-      .select("id, name, days, time_start, time_end, profesor_id")
+      .select("id, name, days, time_start, time_end, profesor_id, max_students, group_students(student_id)")
       .eq("academy_id", profile.academy_id)
       .order("name"),
     supabase
@@ -36,5 +36,16 @@ export default async function GruposPage() {
       .order("full_name"),
   ]);
 
-  return <GruposView groups={groups ?? []} profesores={profesores ?? []} students={students ?? []} />;
+  const groups = ((rawGroups ?? []) as unknown as Array<{
+    id: string; name: string; days: string[]; time_start: string | null;
+    time_end: string | null; profesor_id: string | null; max_students: number;
+    group_students: { student_id: string }[];
+  }>).map(g => ({
+    id: g.id, name: g.name, days: g.days, time_start: g.time_start,
+    time_end: g.time_end, profesor_id: g.profesor_id,
+    max_students: g.max_students ?? 20,
+    student_ids: g.group_students.map(gs => gs.student_id),
+  }));
+
+  return <GruposView groups={groups} profesores={profesores ?? []} students={students ?? []} />;
 }

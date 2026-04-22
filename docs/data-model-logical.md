@@ -42,7 +42,7 @@ Tabla de unión que registra todas las academias que un Director puede gestionar
 
 Un grupo es la unidad operativa de enseñanza: un conjunto de alumnos asignado a un Profesor. Es el contexto en el que ocurre la asistencia.
 
-**Propósito en el negocio:** organiza a los alumnos en unidades manejables. El Profesor trabaja siempre en el contexto de un grupo. Un grupo tiene un único Profesor responsable en el MVP.
+**Propósito en el negocio:** organiza a los alumnos en unidades manejables. El Profesor trabaja siempre en el contexto de un grupo. Un grupo tiene un único Profesor responsable en el MVP. Cada grupo tiene un número máximo de alumnos configurado por el Director.
 
 ---
 
@@ -200,12 +200,14 @@ Los alumnos no son usuarios del sistema en el MVP. Forzar esa relación crearía
 |---|---|---|
 | `id` | uuid PK | Identificador del grupo |
 | `academy_id` | uuid FK → academies NOT NULL | Tenant al que pertenece el grupo |
-| `profesor_id` | uuid FK → profiles NOT NULL | Profesor responsable del grupo |
+| `profesor_id` | uuid FK → profiles NULLABLE | Profesor responsable del grupo (puede estar sin asignar) |
 | `name` | text NOT NULL | Nombre del grupo (ej: "Grupo Avanzado — Lunes") |
+| `max_students` | integer NOT NULL DEFAULT 20 | Número máximo de alumnos del grupo (≥ 1) |
 | `created_at` | timestamptz | Fecha de creación |
 
 **Restricciones:**
-- `profesor_id` debe ser un perfil con `role = 'profesor'` y mismo `academy_id` que el grupo.
+- `profesor_id` puede ser NULL (grupo sin profesor asignado). Si tiene valor, debe ser un perfil con `role = 'profesor'` y mismo `academy_id` que el grupo.
+- `max_students` siempre tiene valor (NOT NULL). El Director lo define al crear o editar el grupo. El valor mínimo es 1.
 - El nombre del grupo debe ser único dentro de la misma academia: UNIQUE (`academy_id`, `name`).
 
 ---
@@ -370,8 +372,11 @@ Las tablas `groups`, `students`, `group_students`, `attendance_sessions`, `atten
 ### ID-2: Un alumno pertenece a exactamente un tenant
 `students.academy_id` es inmutable una vez creado el registro. Un alumno no puede transferirse entre academias ni existir en dos academias simultáneamente.
 
-### ID-3: No puede existir un grupo sin Profesor asignado
-`groups.profesor_id` es NOT NULL. Un grupo siempre tiene un Profesor responsable en el MVP.
+### ID-3: Un grupo puede existir sin Profesor asignado
+`groups.profesor_id` es NULLABLE. El Director puede crear grupos pendientes de asignación de profesor. Cuando tiene valor, el profesor debe pertenecer a la misma academia.
+
+### ID-3b: Todo grupo tiene un número máximo de alumnos definido
+`groups.max_students` es NOT NULL con valor mínimo de 1. El Director lo fija al crear o editar el grupo. El sistema lo muestra en la interfaz como referencia, pero en el MVP no bloquea la matriculación cuando se supera.
 
 ### ID-4: Un alumno no puede estar dos veces en el mismo grupo
 UNIQUE (`group_id`, `student_id`) en `group_students`. La matriculación es única por combinación grupo-alumno.

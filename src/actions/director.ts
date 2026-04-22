@@ -42,21 +42,30 @@ export async function crearGrupo(data: {
   days: string[];
   time_start: string | null;
   time_end: string | null;
-}): Promise<{ error?: string }> {
+  max_students: number;
+}): Promise<{ error?: string; conflictGroupIds?: string[] }> {
   const ctx = await getDirectorCtx();
   if (!ctx) return { error: "Sin permiso" };
 
   if (data.profesor_id) {
-    const { data: profGroups } = await ctx.supabase
-      .from("groups")
-      .select("id, name, days, time_start, time_end")
-      .eq("academy_id", ctx.profile.academy_id)
-      .eq("profesor_id", data.profesor_id);
+    const [{ data: profGroups }, { data: profProfile }] = await Promise.all([
+      ctx.supabase
+        .from("groups")
+        .select("id, name, days, time_start, time_end")
+        .eq("academy_id", ctx.profile.academy_id)
+        .eq("profesor_id", data.profesor_id),
+      ctx.supabase
+        .from("profiles")
+        .select("full_name")
+        .eq("id", data.profesor_id)
+        .single(),
+    ]);
+    const profName = profProfile?.full_name ?? "El profesor";
 
     const newGroup: GroupSchedule = { id: "", name: data.name, days: data.days, time_start: data.time_start, time_end: data.time_end };
     for (const g of profGroups ?? []) {
       if (groupsConflict(newGroup, g as unknown as GroupSchedule)) {
-        return { error: `El profesor ya tiene "${g.name}" que entra en conflicto de horario.` };
+        return { error: `${profName} ya tiene "${g.name}" que entra en conflicto de horario.`, conflictGroupIds: [g.id] };
       }
     }
   }
@@ -68,9 +77,73 @@ export async function crearGrupo(data: {
     days: data.days,
     time_start: data.time_start || null,
     time_end: data.time_end || null,
+    max_students: data.max_students,
   });
 
-  if (error) return { error: error.message };
+  if (error) {
+    if (error.message.includes("groups_academy_id_name_key")) {
+      return { error: "Ya existe un grupo con ese nombre." };
+    }
+    return { error: error.message };
+  }
+  revalidatePath("/grupos");
+  return {};
+}
+
+export async function actualizarGrupo(
+  groupId: string,
+  data: {
+    name: string;
+    days: string[];
+    time_start: string | null;
+    time_end: string | null;
+    max_students: number;
+    profesor_id: string | null;
+  }
+): Promise<{ error?: string }> {
+  const ctx = await getDirectorCtx();
+  if (!ctx) return { error: "Sin permiso" };
+
+  if (data.profesor_id) {
+    const newSched: GroupSchedule = {
+      id: groupId,
+      name: data.name,
+      days: data.days,
+      time_start: data.time_start,
+      time_end: data.time_end,
+    };
+    const { data: profGroups } = await ctx.supabase
+      .from("groups")
+      .select("id, name, days, time_start, time_end")
+      .eq("academy_id", ctx.profile.academy_id)
+      .eq("profesor_id", data.profesor_id)
+      .neq("id", groupId);
+
+    for (const g of profGroups ?? []) {
+      if (groupsConflict(newSched, g as unknown as GroupSchedule)) {
+        return { error: `El horario entra en conflicto con "${g.name}".` };
+      }
+    }
+  }
+
+  const { error } = await ctx.supabase
+    .from("groups")
+    .update({
+      name: data.name,
+      days: data.days,
+      time_start: data.time_start || null,
+      time_end: data.time_end || null,
+      max_students: data.max_students,
+      profesor_id: data.profesor_id || null,
+    })
+    .eq("id", groupId);
+
+  if (error) {
+    if (error.message.includes("groups_academy_id_name_key")) {
+      return { error: "Ya existe un grupo con ese nombre." };
+    }
+    return { error: error.message };
+  }
   revalidatePath("/grupos");
   return {};
 }
@@ -105,16 +178,24 @@ export async function eliminarGrupo(
 export async function actualizarProfesorGrupo(
   groupId: string,
   profesorId: string
-): Promise<{ error?: string }> {
+): Promise<{ error?: string; conflictGroupIds?: string[] }> {
   const ctx = await getDirectorCtx();
   if (!ctx) return { error: "Sin permiso" };
 
   if (profesorId) {
-    const { data: targetGroup } = await ctx.supabase
-      .from("groups")
-      .select("id, name, days, time_start, time_end")
-      .eq("id", groupId)
-      .single();
+    const [{ data: targetGroup }, { data: profProfile }] = await Promise.all([
+      ctx.supabase
+        .from("groups")
+        .select("id, name, days, time_start, time_end")
+        .eq("id", groupId)
+        .single(),
+      ctx.supabase
+        .from("profiles")
+        .select("full_name")
+        .eq("id", profesorId)
+        .single(),
+    ]);
+    const profName = profProfile?.full_name ?? "El profesor";
 
     if (targetGroup) {
       const { data: profGroups } = await ctx.supabase
@@ -126,7 +207,7 @@ export async function actualizarProfesorGrupo(
 
       for (const g of profGroups ?? []) {
         if (groupsConflict(targetGroup as unknown as GroupSchedule, g as unknown as GroupSchedule)) {
-          return { error: `El profesor ya tiene "${g.name}" que entra en conflicto de horario.` };
+          return { error: `${profName} ya tiene "${g.name}" que entra en conflicto de horario.`, conflictGroupIds: [groupId, g.id] };
         }
       }
     }
@@ -315,10 +396,16 @@ export async function actualizarAlumnosGrupo(
   const ctx = await getDirectorCtx();
   if (!ctx) return { error: "Sin permiso" };
 
-  const { data: current } = await ctx.supabase
-    .from("group_students")
-    .select("student_id")
-    .eq("group_id", groupId);
+  const [{ data: current }, { data: groupData }] = await Promise.all([
+    ctx.supabase.from("group_students").select("student_id").eq("group_id", groupId),
+    ctx.supabase.from("groups").select("max_students").eq("id", groupId).single(),
+  ]);
+
+  if (groupData && studentIds.length > groupData.max_students) {
+    return {
+      error: `El grupo tiene un máximo de ${groupData.max_students} alumnos. Has seleccionado ${studentIds.length}.`,
+    };
+  }
 
   const currentIds = new Set((current ?? []).map((r) => r.student_id));
   const newIds = new Set(studentIds);
