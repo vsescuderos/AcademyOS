@@ -1,0 +1,215 @@
+"use client";
+
+import { useState, useTransition } from "react";
+import * as XLSX from "xlsx";
+import { fetchAttendanceReportData, ReportSession } from "@/actions/reports";
+
+type Group = { id: string; name: string };
+type Period = "mes" | "trimestre" | "curso" | "personalizado";
+
+interface Props {
+  groups: Group[];
+  onClose: () => void;
+}
+
+const inputStyle: React.CSSProperties = {
+  border: "1px solid var(--line)", borderRadius: 6, padding: "7px 10px",
+  fontSize: 13, color: "var(--t1)", background: "var(--bg)", outline: "none",
+};
+
+function getDateRange(period: Period, customStart: string, customEnd: string) {
+  const today = new Date();
+  const todayStr = today.toISOString().slice(0, 10);
+  if (period === "mes") {
+    return { start: new Date(today.getFullYear(), today.getMonth(), 1).toISOString().slice(0, 10), end: todayStr };
+  }
+  if (period === "trimestre") {
+    const q = Math.floor(today.getMonth() / 3);
+    return { start: new Date(today.getFullYear(), q * 3, 1).toISOString().slice(0, 10), end: todayStr };
+  }
+  if (period === "curso") {
+    const year = today.getMonth() >= 8 ? today.getFullYear() : today.getFullYear() - 1;
+    return { start: `${year}-09-01`, end: todayStr };
+  }
+  return { start: customStart, end: customEnd };
+}
+
+function makeSheetName(base: string, used: Set<string>): string {
+  let name = base.slice(0, 31);
+  if (!used.has(name)) { used.add(name); return name; }
+  for (let i = 2; ; i++) {
+    const suf = `_${i}`;
+    const candidate = base.slice(0, 31 - suf.length) + suf;
+    if (!used.has(candidate)) { used.add(candidate); return candidate; }
+  }
+}
+
+function generateExcel(sessions: ReportSession[], label: string) {
+  const wb = XLSX.utils.book_new();
+  const usedNames = new Set<string>();
+
+  // Resumen por grupo
+  const groupMap = new Map<string, { name: string; sessions: number; present: number; absent: number; late: number }>();
+  for (const s of sessions) {
+    if (!groupMap.has(s.group_id)) groupMap.set(s.group_id, { name: s.group_name, sessions: 0, present: 0, absent: 0, late: 0 });
+    const g = groupMap.get(s.group_id)!;
+    g.sessions++;
+    for (const r of s.records) {
+      if (r.status === "present") g.present++;
+      else if (r.status === "absent") g.absent++;
+      else g.late++;
+    }
+  }
+  const resumen: unknown[][] = [["Grupo", "Sesiones", "Presentes", "Ausentes", "Tardanzas", "% Asistencia"]];
+  for (const g of groupMap.values()) {
+    const total = g.present + g.absent + g.late;
+    resumen.push([g.name, g.sessions, g.present, g.absent, g.late, total > 0 ? `${Math.round((g.present / total) * 100)}%` : "—"]);
+  }
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(resumen), makeSheetName("Resumen", usedNames));
+
+  // Por alumno
+  const sgMap = new Map<string, { name: string; group: string; present: number; absent: number; late: number }>();
+  for (const s of sessions) {
+    for (const r of s.records) {
+      const key = `${r.student_id}|${s.group_id}`;
+      if (!sgMap.has(key)) sgMap.set(key, { name: r.student_name, group: s.group_name, present: 0, absent: 0, late: 0 });
+      const sg = sgMap.get(key)!;
+      if (r.status === "present") sg.present++;
+      else if (r.status === "absent") sg.absent++;
+      else sg.late++;
+    }
+  }
+  const porAlumno: unknown[][] = [["Alumno", "Grupo", "Presentes", "Ausentes", "Tardanzas", "% Asistencia"]];
+  for (const sg of [...sgMap.values()].sort((a, b) => a.group.localeCompare(b.group) || a.name.localeCompare(b.name))) {
+    const total = sg.present + sg.absent + sg.late;
+    porAlumno.push([sg.name, sg.group, sg.present, sg.absent, sg.late, total > 0 ? `${Math.round((sg.present / total) * 100)}%` : "—"]);
+  }
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(porAlumno), makeSheetName("Por alumno", usedNames));
+
+  // Pivot por grupo
+  const statusLabel = (st: string) => st === "present" ? "P" : st === "absent" ? "A" : "T";
+  for (const [groupId, groupInfo] of groupMap.entries()) {
+    const gs = sessions.filter(s => s.group_id === groupId).sort((a, b) => a.date.localeCompare(b.date));
+    const studentNames = new Map<string, string>();
+    for (const s of gs) for (const r of s.records) studentNames.set(r.student_id, r.student_name);
+    const pivot: unknown[][] = [["Alumno", ...gs.map(s => s.date)]];
+    for (const [sid, sname] of [...studentNames.entries()].sort((a, b) => a[1].localeCompare(b[1]))) {
+      pivot.push([sname, ...gs.map(s => { const rec = s.records.find(r => r.student_id === sid); return rec ? statusLabel(rec.status) : "—"; })]);
+    }
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(pivot), makeSheetName(groupInfo.name, usedNames));
+  }
+
+  // Datos brutos
+  const raw: unknown[][] = [["Fecha", "Grupo", "Alumno", "Estado"]];
+  const statusES = (st: string) => st === "present" ? "Presente" : st === "absent" ? "Ausente" : "Tarde";
+  for (const s of [...sessions].sort((a, b) => a.date.localeCompare(b.date) || a.group_name.localeCompare(b.group_name))) {
+    for (const r of [...s.records].sort((a, b) => a.student_name.localeCompare(b.student_name))) {
+      raw.push([s.date, s.group_name, r.student_name, statusES(r.status)]);
+    }
+  }
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(raw), makeSheetName("Datos brutos", usedNames));
+
+  XLSX.writeFile(wb, `informe-asistencia-${label}.xlsx`);
+}
+
+export default function InformeAsistencia({ groups, onClose }: Props) {
+  const [period, setPeriod] = useState<Period>("mes");
+  const [customStart, setCustomStart] = useState(new Date().toISOString().slice(0, 7) + "-01");
+  const [customEnd, setCustomEnd] = useState(new Date().toISOString().slice(0, 10));
+  const [groupSel, setGroupSel] = useState<"all" | "custom">("all");
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [error, setError] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  function toggleGroup(id: string) {
+    setSelectedIds(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next; });
+  }
+
+  function handleExport() {
+    const { start, end } = getDateRange(period, customStart, customEnd);
+    if (!start || !end) { setError("Selecciona el período de fechas."); return; }
+    if (start > end) { setError("La fecha de inicio debe ser anterior a la fecha de fin."); return; }
+    const groupIds = groupSel === "all" ? null : [...selectedIds];
+    if (groupSel === "custom" && groupIds!.length === 0) { setError("Selecciona al menos un grupo."); return; }
+    setError(null);
+    startTransition(async () => {
+      const result = await fetchAttendanceReportData({ startDate: start, endDate: end, groupIds });
+      if (result.error) { setError(result.error); return; }
+      if (!result.data || result.data.sessions.length === 0) { setError("No hay datos de asistencia en el período seleccionado."); return; }
+      const label = period === "personalizado" ? `${start}_${end}` : period;
+      generateExcel(result.data.sessions, label);
+    });
+  }
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.35)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}
+      onClick={onClose}>
+      <div style={{ background: "var(--bg)", borderRadius: 12, padding: "28px 32px", width: 480, maxHeight: "85vh", overflowY: "auto", boxShadow: "0 8px 32px rgba(0,0,0,0.14)" }}
+        onClick={e => e.stopPropagation()}>
+
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
+          <span style={{ fontSize: 15, fontWeight: 600, color: "var(--t1)" }}>Informe de asistencia</span>
+          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "var(--t3)", lineHeight: 1 }}>✕</button>
+        </div>
+
+        {/* Period */}
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: "var(--t3)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>Período</div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 10 }}>
+            {(["mes", "trimestre", "curso", "personalizado"] as Period[]).map(p => (
+              <label key={p} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "var(--t1)", cursor: "pointer" }}>
+                <input type="radio" checked={period === p} onChange={() => setPeriod(p)} style={{ cursor: "pointer" }} />
+                {p === "mes" ? "Este mes" : p === "trimestre" ? "Este trimestre" : p === "curso" ? "Curso actual" : "Personalizado"}
+              </label>
+            ))}
+          </div>
+          {period === "personalizado" && (
+            <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+              <input type="date" value={customStart} onChange={e => setCustomStart(e.target.value)} style={{ ...inputStyle, flex: 1 }} />
+              <span style={{ fontSize: 12, color: "var(--t3)" }}>hasta</span>
+              <input type="date" value={customEnd} onChange={e => setCustomEnd(e.target.value)} style={{ ...inputStyle, flex: 1 }} />
+            </div>
+          )}
+        </div>
+
+        {/* Groups */}
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: "var(--t3)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>Grupos</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "var(--t1)", cursor: "pointer" }}>
+              <input type="radio" checked={groupSel === "all"} onChange={() => setGroupSel("all")} style={{ cursor: "pointer" }} />
+              Todos los grupos
+            </label>
+            <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "var(--t1)", cursor: "pointer" }}>
+              <input type="radio" checked={groupSel === "custom"} onChange={() => setGroupSel("custom")} style={{ cursor: "pointer" }} />
+              Seleccionar grupos
+            </label>
+          </div>
+          {groupSel === "custom" && (
+            <div style={{ marginTop: 10, maxHeight: 160, overflowY: "auto", border: "1px solid var(--line)", borderRadius: 8, padding: "8px 12px", display: "flex", flexDirection: "column", gap: 6 }}>
+              {groups.map(g => (
+                <label key={g.id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "var(--t1)", cursor: "pointer" }}>
+                  <input type="checkbox" checked={selectedIds.has(g.id)} onChange={() => toggleGroup(g.id)} style={{ cursor: "pointer" }} />
+                  {g.name}
+                </label>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {error && (
+          <p style={{ fontSize: 12.5, color: "var(--err)", background: "#fef2f2", borderRadius: 6, padding: "8px 12px", marginBottom: 16 }}>{error}</p>
+        )}
+
+        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <button onClick={onClose} style={{ padding: "8px 16px", borderRadius: 6, fontSize: 13, color: "var(--t2)", background: "transparent", border: "1px solid var(--line)", cursor: "pointer" }}>
+            Cancelar
+          </button>
+          <button onClick={handleExport} disabled={isPending} style={{ padding: "8px 16px", borderRadius: 6, fontSize: 13, fontWeight: 500, color: "#fff", background: "var(--accent)", border: "none", cursor: "pointer", opacity: isPending ? 0.6 : 1 }}>
+            {isPending ? "Generando…" : "Exportar Excel"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
