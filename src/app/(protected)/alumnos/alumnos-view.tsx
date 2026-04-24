@@ -71,6 +71,7 @@ export default function AlumnosView({ alumnos, groups }: { alumnos: Alumno[]; gr
   const [groupConflictError, setGroupConflictError] = useState<string | null>(null);
 
   const [editingAlumno, setEditingAlumno] = useState<Alumno | null>(null);
+  const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
@@ -352,18 +353,9 @@ export default function AlumnosView({ alumnos, groups }: { alumnos: Alumno[]; gr
 
         {/* Delete error */}
         {deleteError && (
-          <div
-            style={{
-              margin: "16px 28px 0",
-              fontSize: 12.5,
-              color: "var(--err)",
-              background: "#fef2f2",
-              border: "1px solid #fecaca",
-              borderRadius: 6,
-              padding: "10px 14px",
-            }}
-          >
-            {deleteError}
+          <div style={{ margin: "16px 28px 0", fontSize: 12.5, color: "var(--err)", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 6, padding: "10px 14px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+            <span>{deleteError}</span>
+            <button onClick={() => setDeleteError(null)} style={{ fontSize: 16, lineHeight: 1, color: "var(--err)", background: "none", border: "none", cursor: "pointer", flexShrink: 0 }}>×</button>
           </div>
         )}
 
@@ -401,15 +393,51 @@ export default function AlumnosView({ alumnos, groups }: { alumnos: Alumno[]; gr
                   key={a.id}
                   alumno={a}
                   editing={editingAlumno?.id === a.id}
-                  deleting={deletingId === a.id}
                   onEdit={() => handleEditAlumno(a)}
-                  onDelete={() => handleEliminar(a.id)}
+                  onRequestDelete={() => setConfirmingDeleteId(a.id)}
                 />
               ))}
             </tbody>
           </table>
         )}
       </div>
+
+      {/* Delete confirmation modal */}
+      {confirmingDeleteId && (() => {
+        const alumno = alumnos.find((a) => a.id === confirmingDeleteId) ?? null;
+        if (!alumno) return null;
+        return (
+          <div
+            style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.35)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}
+            onClick={() => setConfirmingDeleteId(null)}
+          >
+            <div
+              style={{ background: "var(--bg)", borderRadius: 12, padding: "28px 32px", maxWidth: 380, width: "90%", boxShadow: "0 8px 32px rgba(0,0,0,0.14)" }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div style={{ fontSize: 15, fontWeight: 600, color: "var(--t1)", marginBottom: 10 }}>Eliminar alumno</div>
+              <p style={{ fontSize: 13.5, color: "var(--t2)", marginBottom: 24, lineHeight: 1.55 }}>
+                Estás a punto de eliminar al alumno <strong>'{alumno.full_name}'</strong>. Esta acción no se puede deshacer.
+              </p>
+              <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                <button
+                  onClick={() => setConfirmingDeleteId(null)}
+                  style={{ fontSize: 12.5, color: "var(--t2)", border: "1px solid var(--line)", borderRadius: 6, padding: "7px 16px", background: "transparent", cursor: "pointer" }}
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={() => { setConfirmingDeleteId(null); handleEliminar(alumno.id); }}
+                  disabled={deletingId === alumno.id}
+                  style={{ fontSize: 12.5, fontWeight: 500, color: "#fff", border: "none", borderRadius: 6, padding: "7px 16px", background: "#dc2626", cursor: "pointer", opacity: deletingId === alumno.id ? 0.6 : 1 }}
+                >
+                  Eliminar
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
@@ -417,15 +445,13 @@ export default function AlumnosView({ alumnos, groups }: { alumnos: Alumno[]; gr
 function AlumnoRow({
   alumno,
   editing,
-  deleting,
   onEdit,
-  onDelete,
+  onRequestDelete,
 }: {
   alumno: Alumno;
   editing: boolean;
-  deleting: boolean;
   onEdit: () => void;
-  onDelete: () => void;
+  onRequestDelete: () => void;
 }) {
   const [hovered, setHovered] = useState(false);
   return (
@@ -451,41 +477,20 @@ function AlumnoRow({
           whiteSpace: "nowrap",
         }}
       >
-        <button
-          onClick={onEdit}
-          style={{
-            fontSize: 12,
-            fontWeight: 500,
-            color: editing ? "var(--accent)" : "var(--t2)",
-            background: editing ? "var(--accent-light)" : "transparent",
-            border: `1px solid ${editing ? "var(--accent-border)" : "var(--line)"}`,
-            borderRadius: 6,
-            padding: "4px 12px",
-            cursor: "pointer",
-            marginRight: 6,
-            transition: "all 0.12s",
-          }}
-        >
-          Editar
-        </button>
-        <button
-          onClick={onDelete}
-          disabled={deleting}
-          style={{
-            fontSize: 18,
-            lineHeight: 1,
-            color: hovered ? "var(--err)" : "var(--t3)",
-            background: "none",
-            border: "none",
-            cursor: "pointer",
-            opacity: deleting ? 0.3 : 1,
-            transition: "color 0.1s",
-            verticalAlign: "middle",
-          }}
-          title="Eliminar alumno"
-        >
-          ×
-        </button>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, justifyContent: "flex-end" }}>
+          <button
+            onClick={onEdit}
+            style={{ fontSize: 12, fontWeight: 500, color: editing ? "var(--accent)" : "var(--t2)", background: editing ? "var(--accent-light)" : "transparent", border: `1px solid ${editing ? "var(--accent-border)" : "var(--line)"}`, borderRadius: 6, padding: "4px 12px", cursor: "pointer", transition: "all 0.12s", whiteSpace: "nowrap" }}
+          >
+            {editing ? "Cerrar" : "Editar"}
+          </button>
+          <button
+            onClick={onRequestDelete}
+            style={{ fontSize: 12, fontWeight: 500, color: "var(--t2)", background: "transparent", border: "1px solid var(--line)", borderRadius: 6, padding: "4px 12px", cursor: "pointer", transition: "all 0.12s", whiteSpace: "nowrap" }}
+          >
+            Eliminar
+          </button>
+        </div>
       </td>
     </tr>
   );
