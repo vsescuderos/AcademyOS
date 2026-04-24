@@ -261,9 +261,37 @@ export async function crearProfesor(data: {
   full_name: string;
   email: string;
   password: string;
+  groupIds?: string[];
 }): Promise<{ error?: string }> {
   const ctx = await getDirectorCtx();
   if (!ctx) return { error: "Sin permiso" };
+
+  if (data.groupIds && data.groupIds.length > 0) {
+    const { data: groupsToAssign } = await ctx.supabase
+      .from("groups")
+      .select("id, name, days, time_start, time_end, profesor_id")
+      .in("id", data.groupIds)
+      .eq("academy_id", ctx.profile.academy_id);
+
+    const taken = (groupsToAssign ?? []).filter((g) => g.profesor_id !== null);
+    if (taken.length > 0) {
+      const profIds = [...new Set(taken.map((g) => g.profesor_id!))];
+      const { data: profs } = await ctx.supabase
+        .from("profiles").select("id, full_name").in("id", profIds);
+      const profMap = new Map((profs ?? []).map((p) => [p.id, p.full_name]));
+      const first = taken[0];
+      return { error: `El grupo "${first.name}" ya está asignado al profesor ${profMap.get(first.profesor_id!) ?? "otro profesor"}.` };
+    }
+
+    const gs = (groupsToAssign ?? []) as unknown as GroupSchedule[];
+    for (let i = 0; i < gs.length; i++) {
+      for (let j = i + 1; j < gs.length; j++) {
+        if (groupsConflict(gs[i], gs[j])) {
+          return { error: `"${gs[i].name}" y "${gs[j].name}" tienen conflicto de horario.` };
+        }
+      }
+    }
+  }
 
   const admin = createAdminClient();
 
@@ -289,13 +317,21 @@ export async function crearProfesor(data: {
     return { error: profileError.message };
   }
 
+  if (data.groupIds && data.groupIds.length > 0) {
+    await ctx.supabase
+      .from("groups")
+      .update({ profesor_id: authUser.user.id })
+      .in("id", data.groupIds)
+      .eq("academy_id", ctx.profile.academy_id);
+  }
+
   revalidatePath("/grupos");
   revalidatePath("/profesores");
   return {};
 }
 
 export async function crearProfesoresBatch(
-  profesores: Array<{ full_name: string; email: string; password: string }>
+  profesores: Array<{ full_name: string; email: string; password: string; group_name?: string }>
 ): Promise<{ created: number; errors: string[] }> {
   const ctx = await getDirectorCtx();
   if (!ctx) return { created: 0, errors: ["Sin permiso"] };
@@ -303,6 +339,14 @@ export async function crearProfesoresBatch(
   const admin = createAdminClient();
   let created = 0;
   const errors: string[] = [];
+
+  const { data: grupos } = await ctx.supabase
+    .from("groups")
+    .select("id, name, profesor_id")
+    .eq("academy_id", ctx.profile.academy_id);
+  const groupByName = new Map(
+    (grupos ?? []).map((g) => [g.name.toLowerCase().trim(), g])
+  );
 
   for (const p of profesores) {
     const { data: authUser, error: authError } = await admin.auth.admin.createUser({
@@ -324,13 +368,157 @@ export async function crearProfesoresBatch(
     if (profileError) {
       await admin.auth.admin.deleteUser(authUser.user.id);
       errors.push(`"${p.full_name}": ${profileError.message}`);
-    } else {
-      created++;
+      continue;
+    }
+
+    if (p.group_name?.trim()) {
+      const group = groupByName.get(p.group_name.toLowerCase().trim());
+      if (!group) {
+        errors.push(`"${p.full_name}": grupo "${p.group_name}" no encontrado. Profesor creado sin grupo.`);
+      } else if (group.profesor_id) {
+        errors.push(`"${p.full_name}": el grupo "${group.name}" ya tiene un profesor asignado. Profesor creado sin grupo.`);
+      } else {
+        const { error: gErr } = await ctx.supabase
+          .from("groups")
+          .update({ profesor_id: authUser.user.id })
+          .eq("id", group.id)
+          .eq("academy_id", ctx.profile.academy_id);
+        if (gErr) {
+          errors.push(`"${p.full_name}": error al asignar grupo. Profesor creado sin grupo.`);
+        } else {
+          group.profesor_id = authUser.user.id;
+        }
+      }
+    }
+
+    created++;
+  }
+
+  if (created > 0) {
+    revalidatePath("/profesores");
+    revalidatePath("/grupos");
+  }
+  return { created, errors };
+}
+
+export async function asignarGruposAProfesor(
+  profesorId: string,
+  groupIds: string[]
+): Promise<{ error?: string }> {
+  const ctx = await getDirectorCtx();
+  if (!ctx) return { error: "Sin permiso" };
+
+  const { data: currentGroups } = await ctx.supabase
+    .from("groups")
+    .select("id, name, days, time_start, time_end")
+    .eq("academy_id", ctx.profile.academy_id)
+    .eq("profesor_id", profesorId);
+
+  const currentIds = new Set((currentGroups ?? []).map((g) => g.id));
+  const newIds = new Set(groupIds);
+  const toRemove = [...currentIds].filter((id) => !newIds.has(id));
+  const toAdd = [...newIds].filter((id) => !currentIds.has(id));
+
+  if (toAdd.length > 0) {
+    const { data: groupsToAdd } = await ctx.supabase
+      .from("groups")
+      .select("id, name, days, time_start, time_end, profesor_id")
+      .in("id", toAdd)
+      .eq("academy_id", ctx.profile.academy_id);
+
+    const taken = (groupsToAdd ?? []).filter(
+      (g) => g.profesor_id && g.profesor_id !== profesorId
+    );
+    if (taken.length > 0) {
+      const profIds = [...new Set(taken.map((g) => g.profesor_id!))];
+      const { data: profs } = await ctx.supabase
+        .from("profiles").select("id, full_name").in("id", profIds);
+      const profMap = new Map((profs ?? []).map((p) => [p.id, p.full_name]));
+      const first = taken[0];
+      return { error: `El grupo "${first.name}" ya está asignado al profesor ${profMap.get(first.profesor_id!) ?? "otro profesor"}.` };
+    }
+
+    const keptIds = [...currentIds].filter((id) => newIds.has(id));
+    const kept = (currentGroups ?? []).filter((g) => keptIds.includes(g.id));
+    const allResult = [
+      ...(kept as unknown as GroupSchedule[]),
+      ...((groupsToAdd ?? []) as unknown as GroupSchedule[]),
+    ];
+    for (let i = 0; i < allResult.length; i++) {
+      for (let j = i + 1; j < allResult.length; j++) {
+        if (groupsConflict(allResult[i], allResult[j])) {
+          return { error: `"${allResult[i].name}" y "${allResult[j].name}" tienen conflicto de horario.` };
+        }
+      }
     }
   }
 
-  if (created > 0) revalidatePath("/profesores");
-  return { created, errors };
+  if (toRemove.length > 0) {
+    const { error } = await ctx.supabase
+      .from("groups")
+      .update({ profesor_id: null })
+      .in("id", toRemove)
+      .eq("academy_id", ctx.profile.academy_id);
+    if (error) return { error: error.message };
+  }
+
+  if (toAdd.length > 0) {
+    const { error } = await ctx.supabase
+      .from("groups")
+      .update({ profesor_id: profesorId })
+      .in("id", toAdd)
+      .eq("academy_id", ctx.profile.academy_id);
+    if (error) return { error: error.message };
+  }
+
+  revalidatePath("/profesores");
+  revalidatePath("/grupos");
+  return {};
+}
+
+export async function actualizarProfesor(
+  profesorId: string,
+  data: { full_name: string }
+): Promise<{ error?: string }> {
+  const ctx = await getDirectorCtx();
+  if (!ctx) return { error: "Sin permiso" };
+
+  const { error } = await ctx.supabase
+    .from("profiles")
+    .update({ full_name: data.full_name.trim() })
+    .eq("id", profesorId)
+    .eq("academy_id", ctx.profile.academy_id)
+    .eq("role", "profesor");
+
+  if (error) return { error: error.message };
+  revalidatePath("/profesores");
+  revalidatePath("/grupos");
+  return {};
+}
+
+export async function eliminarProfesor(
+  profesorId: string
+): Promise<{ error?: string }> {
+  const ctx = await getDirectorCtx();
+  if (!ctx) return { error: "Sin permiso" };
+
+  const { count } = await ctx.supabase
+    .from("groups")
+    .select("id", { count: "exact", head: true })
+    .eq("academy_id", ctx.profile.academy_id)
+    .eq("profesor_id", profesorId);
+
+  if (count && count > 0) {
+    return { error: "No se puede eliminar un profesor con grupos asignados." };
+  }
+
+  const admin = createAdminClient();
+  const { error } = await admin.auth.admin.deleteUser(profesorId);
+  if (error) return { error: error.message };
+
+  revalidatePath("/profesores");
+  revalidatePath("/grupos");
+  return {};
 }
 
 export async function crearAlumno(data: {

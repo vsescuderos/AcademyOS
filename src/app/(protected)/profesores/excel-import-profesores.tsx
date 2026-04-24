@@ -3,16 +3,16 @@
 import { useState, useRef, useTransition } from "react";
 import { crearProfesoresBatch } from "@/actions/director";
 
-type ParsedProfesor = { full_name: string; email: string; password: string };
+type ParsedProfesor = { full_name: string; email: string; password: string; group_name: string };
 
 async function downloadTemplate() {
   const XLSX = await import("xlsx");
   const ws = XLSX.utils.aoa_to_sheet([
-    ["Nombre *", "Email *", "Contraseña *"],
-    ["Ana García", "ana@academia.com", "Contraseña123"],
-    ["Luis Pérez", "luis@academia.com", "Contraseña456"],
+    ["Nombre *", "Email *", "Contraseña *", "Grupo"],
+    ["Ana García", "ana@academia.com", "Contraseña123", "Avanzado — Lunes"],
+    ["Luis Pérez", "luis@academia.com", "Contraseña456", ""],
   ]);
-  ws["!cols"] = [{ wch: 28 }, { wch: 28 }, { wch: 20 }];
+  ws["!cols"] = [{ wch: 28 }, { wch: 28 }, { wch: 20 }, { wch: 26 }];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Profesores");
   XLSX.writeFile(wb, "plantilla_profesores.xlsx");
@@ -33,6 +33,7 @@ async function parseFile(file: File): Promise<{ rows: ParsedProfesor[]; errors: 
     const full_name = row[0] ? String(row[0]).trim() : "";
     const email = row[1] ? String(row[1]).trim() : "";
     const password = row[2] ? String(row[2]).trim() : "";
+    const group_name = row[3] ? String(row[3]).trim() : "";
 
     if (!full_name) continue;
 
@@ -41,7 +42,7 @@ async function parseFile(file: File): Promise<{ rows: ParsedProfesor[]; errors: 
       continue;
     }
 
-    rows.push({ full_name, email, password });
+    rows.push({ full_name, email, password, group_name });
   }
 
   return { rows, errors };
@@ -124,7 +125,7 @@ export default function ExcelImportProfesores({
       >
         <div style={{ flex: 1, fontSize: 12.5, color: "var(--t2)" }}>
           Descarga la plantilla, rellena los profesores y súbela aquí. Columnas:{" "}
-          <strong>Nombre</strong>, Email, Contraseña.
+          <strong>Nombre</strong>, Email, Contraseña, Grupo (opcional).
         </div>
         <button
           onClick={downloadTemplate}
@@ -199,7 +200,7 @@ export default function ExcelImportProfesores({
           >
             <thead>
               <tr style={{ background: "var(--bg2)" }}>
-                {["Nombre", "Email"].map((h) => (
+                {["Nombre", "Email", "Grupo"].map((h) => (
                   <th
                     key={h}
                     style={{
@@ -223,6 +224,7 @@ export default function ExcelImportProfesores({
                 <tr key={i} style={{ borderBottom: "1px solid var(--line)" }}>
                   <td style={{ padding: "7px 12px", color: "var(--t1)" }}>{r.full_name}</td>
                   <td style={{ padding: "7px 12px", color: "var(--t2)" }}>{r.email}</td>
+                  <td style={{ padding: "7px 12px", color: "var(--t2)" }}>{r.group_name || "—"}</td>
                 </tr>
               ))}
             </tbody>
