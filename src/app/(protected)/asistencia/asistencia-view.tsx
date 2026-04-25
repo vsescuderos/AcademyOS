@@ -13,6 +13,12 @@ type GroupState =
   | { status: "pending"; students: Student[] }
   | { status: "confirmed"; students: Student[]; records: AttendanceMap };
 
+const STATUSES: Array<{ value: "present" | "absent" | "late"; label: string; color: string }> = [
+  { value: "present", label: "Presente", color: "var(--ok)" },
+  { value: "absent", label: "Ausente", color: "var(--err)" },
+  { value: "late", label: "Tarde", color: "var(--warn)" },
+];
+
 export default function AsistenciaView({ groups }: { groups: Group[] }) {
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [groupState, setGroupState] = useState<GroupState>({ status: "idle" });
@@ -21,7 +27,11 @@ export default function AsistenciaView({ groups }: { groups: Group[] }) {
   const [saveError, setSaveError] = useState<string | null>(null);
 
   async function selectGroup(groupId: string) {
-    if (groupId === selectedGroupId) return;
+    if (groupId === selectedGroupId) {
+      setSelectedGroupId(null);
+      setGroupState({ status: "idle" });
+      return;
+    }
     setSelectedGroupId(groupId);
     setAttendance({});
     setSaveError(null);
@@ -77,19 +87,13 @@ export default function AsistenciaView({ groups }: { groups: Group[] }) {
     if (result.error) {
       setSaveError(result.error);
     } else {
-      setGroupState({
-        status: "confirmed",
-        students: groupState.students,
-        records: { ...attendance },
-      });
+      setGroupState({ status: "confirmed", students: groupState.students, records: { ...attendance } });
     }
     setSaving(false);
   }
 
   const today = new Date().toLocaleDateString("es-ES", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
+    weekday: "long", day: "numeric", month: "long",
   });
 
   const allMarked =
@@ -98,283 +102,199 @@ export default function AsistenciaView({ groups }: { groups: Group[] }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      {/* Topbar */}
-      <div
-        style={{
-          height: 54,
-          borderBottom: "1px solid var(--line)",
-          display: "flex",
-          alignItems: "center",
-          padding: "0 28px",
-          justifyContent: "space-between",
-          flexShrink: 0,
-          background: "var(--bg)",
-        }}
-      >
-        <span style={{ fontWeight: 600, fontSize: 16, color: "var(--t1)" }}>
-          Asistencia
-        </span>
-        <span
-          style={{ fontSize: 12.5, color: "var(--t3)", textTransform: "capitalize" }}
-        >
-          {today}
-        </span>
+      <div style={{
+        height: 54, borderBottom: "1px solid var(--line)", display: "flex",
+        alignItems: "center", padding: "0 28px", justifyContent: "space-between",
+        flexShrink: 0, background: "var(--bg)",
+      }}>
+        <span style={{ fontWeight: 600, fontSize: 16, color: "var(--t1)" }}>Asistencia</span>
+        <span style={{ fontSize: 12.5, color: "var(--t3)", textTransform: "capitalize" }}>{today}</span>
       </div>
 
-      {/* Content */}
       <div style={{ flex: 1, overflowY: "auto", padding: "24px 28px" }}>
-        {/* Group list */}
-        <div style={{ marginBottom: 24 }}>
-          <div
-            style={{
-              fontSize: 10,
-              fontWeight: 600,
-              color: "var(--t3)",
-              textTransform: "uppercase",
-              letterSpacing: "0.08em",
-              marginBottom: 10,
-            }}
-          >
-            Mis grupos
+        {groups.length === 0 ? (
+          <p style={{ fontSize: 13, color: "var(--t3)" }}>No tienes grupos asignados.</p>
+        ) : (
+          <div style={{ border: "1px solid var(--line)", borderRadius: 10, overflow: "hidden" }}>
+            {groups.map((g, i) => {
+              const isSelected = selectedGroupId === g.id;
+              const isLast = i === groups.length - 1;
+              const isPending = groupState.status === "pending";
+              return (
+                <div key={g.id}>
+                  <GroupRow
+                    label={g.name}
+                    isSelected={isSelected}
+                    hasBorder={!isLast || isSelected}
+                    onClick={() => selectGroup(g.id)}
+                  />
+
+                  {isSelected && (
+                    <div style={{ borderBottom: isLast ? "none" : "1px solid var(--line)" }}>
+                      {groupState.status === "loading" && (
+                        <p style={{ padding: "20px 24px", fontSize: 13, color: "var(--t3)" }}>
+                          Cargando alumnos…
+                        </p>
+                      )}
+
+                      {(groupState.status === "pending" || groupState.status === "confirmed") && (
+                        groupState.students.length === 0 ? (
+                          <p style={{ padding: "20px 24px", fontSize: 13, color: "var(--t3)" }}>
+                            No hay alumnos en este grupo.
+                          </p>
+                        ) : (
+                          <>
+                            {groupState.status === "confirmed" && (
+                              <div style={{
+                                padding: "10px 20px",
+                                borderBottom: "1px solid var(--line)",
+                                background: "var(--ok-dim)",
+                                fontSize: 12.5,
+                                color: "var(--ok)",
+                                fontWeight: 500,
+                              }}>
+                                ✓ Asistencia ya confirmada hoy
+                              </div>
+                            )}
+
+                            {groupState.students.map((student, si) => {
+                              const isConfirmed = groupState.status === "confirmed";
+                              const currentStatus = isConfirmed
+                                ? groupState.records[student.id]
+                                : attendance[student.id];
+                              const isLastStudent = si === groupState.students.length - 1;
+                              return (
+                                <StudentRow
+                                  key={student.id}
+                                  student={student}
+                                  currentStatus={currentStatus}
+                                  disabled={isConfirmed}
+                                  hasBorder={isPending || !isLastStudent}
+                                  onChange={(val) => setAttendance((a) => ({ ...a, [student.id]: val }))}
+                                />
+                              );
+                            })}
+
+                            {isPending && (
+                              <div style={{ padding: "14px 20px", background: "var(--bg2)" }}>
+                                {saveError && (
+                                  <p style={{
+                                    marginBottom: 10, fontSize: 12.5, color: "var(--err)",
+                                    background: "#fef2f2", borderRadius: 6, padding: "8px 14px",
+                                  }}>
+                                    {saveError}
+                                  </p>
+                                )}
+                                <button
+                                  onClick={handleConfirmar}
+                                  disabled={!allMarked || saving}
+                                  style={{
+                                    width: "100%", padding: "10px", borderRadius: 6,
+                                    fontSize: 13, fontWeight: 500, color: "#fff",
+                                    background: "var(--accent)", border: "none",
+                                    cursor: allMarked && !saving ? "pointer" : "not-allowed",
+                                    opacity: !allMarked || saving ? 0.5 : 1,
+                                    transition: "opacity 0.15s",
+                                  }}
+                                >
+                                  {saving ? "Guardando…" : "Confirmar asistencia"}
+                                </button>
+                              </div>
+                            )}
+                          </>
+                        )
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
-          {groups.length === 0 ? (
-            <p style={{ fontSize: 13, color: "var(--t3)" }}>
-              No tienes grupos asignados.
-            </p>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              {groups.map((g) => (
-                <GroupButton
-                  key={g.id}
-                  group={g}
-                  isSelected={selectedGroupId === g.id}
-                  onClick={() => selectGroup(g.id)}
-                />
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Students panel */}
-        {groupState.status === "loading" && (
-          <p style={{ fontSize: 13, color: "var(--t3)" }}>Cargando…</p>
-        )}
-
-        {(groupState.status === "pending" ||
-          groupState.status === "confirmed") && (
-          <>
-            {groupState.students.length === 0 ? (
-              <p style={{ fontSize: 13, color: "var(--t3)" }}>
-                No hay alumnos en este grupo.
-              </p>
-            ) : (
-              <>
-                {groupState.status === "confirmed" && (
-                  <div
-                    style={{
-                      marginBottom: 12,
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 8,
-                      fontSize: 12.5,
-                      color: "var(--ok)",
-                      background: "var(--ok-dim)",
-                      border: "1px solid var(--accent-border)",
-                      borderRadius: 6,
-                      padding: "8px 14px",
-                    }}
-                  >
-                    Asistencia confirmada para hoy
-                  </div>
-                )}
-
-                <table
-                  style={{ width: "100%", borderCollapse: "collapse" }}
-                >
-                  <thead>
-                    <tr style={{ background: "var(--bg2)" }}>
-                      {["Alumno", "Presente", "Ausente", "Tarde"].map((col) => (
-                        <th
-                          key={col}
-                          style={{
-                            textAlign: col === "Alumno" ? "left" : "center",
-                            padding: "9px 20px",
-                            fontSize: 11,
-                            fontWeight: 600,
-                            color: "var(--t3)",
-                            textTransform: "uppercase",
-                            letterSpacing: "0.06em",
-                            borderBottom: "1px solid var(--line)",
-                          }}
-                        >
-                          {col}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {groupState.students.map((student) => {
-                      const isConfirmed = groupState.status === "confirmed";
-                      const savedStatus = isConfirmed
-                        ? groupState.records[student.id]
-                        : undefined;
-                      const currentStatus = isConfirmed
-                        ? savedStatus
-                        : attendance[student.id];
-
-                      return (
-                        <StudentRow
-                          key={student.id}
-                          student={student}
-                          currentStatus={currentStatus}
-                          disabled={isConfirmed}
-                          onChange={(val) =>
-                            setAttendance((a) => ({
-                              ...a,
-                              [student.id]: val,
-                            }))
-                          }
-                        />
-                      );
-                    })}
-                  </tbody>
-                </table>
-
-                {groupState.status === "pending" && (
-                  <div style={{ marginTop: 16 }}>
-                    {saveError && (
-                      <p
-                        style={{
-                          marginBottom: 10,
-                          fontSize: 12.5,
-                          color: "var(--err)",
-                          background: "#fef2f2",
-                          borderRadius: 6,
-                          padding: "8px 14px",
-                        }}
-                      >
-                        {saveError}
-                      </p>
-                    )}
-                    <button
-                      onClick={handleConfirmar}
-                      disabled={!allMarked || saving}
-                      style={{
-                        width: "100%",
-                        padding: "10px",
-                        borderRadius: 6,
-                        fontSize: 13,
-                        fontWeight: 500,
-                        color: "#fff",
-                        background: "var(--accent)",
-                        border: "none",
-                        cursor: allMarked && !saving ? "pointer" : "not-allowed",
-                        opacity: !allMarked || saving ? 0.5 : 1,
-                        transition: "opacity 0.15s",
-                      }}
-                    >
-                      {saving ? "Guardando…" : "Confirmar asistencia"}
-                    </button>
-                  </div>
-                )}
-              </>
-            )}
-          </>
         )}
       </div>
     </div>
   );
 }
 
-function GroupButton({
-  group,
-  isSelected,
-  onClick,
-}: {
-  group: Group;
+function GroupRow({ label, isSelected, hasBorder, onClick }: {
+  label: string;
   isSelected: boolean;
+  hasBorder: boolean;
   onClick: () => void;
 }) {
   const [hovered, setHovered] = useState(false);
   return (
-    <button
+    <div
       onClick={onClick}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
-        textAlign: "left",
-        padding: "10px 14px",
-        borderRadius: 6,
-        fontSize: 13,
-        fontWeight: isSelected ? 500 : 400,
-        cursor: "pointer",
-        border: `1px solid ${isSelected ? "var(--accent-border)" : hovered ? "#d1d5db" : "var(--line)"}`,
-        background: isSelected ? "var(--accent-light)" : "var(--bg)",
-        color: isSelected ? "var(--accent)" : "var(--t1)",
-        transition: "all 0.12s",
+        display: "flex", alignItems: "center",
+        padding: "13px 20px", cursor: "pointer",
+        background: isSelected ? "var(--accent-light)" : hovered ? "var(--bg2)" : "var(--bg)",
+        borderLeft: `3px solid ${isSelected ? "var(--accent)" : "transparent"}`,
+        borderBottom: hasBorder ? "1px solid var(--line)" : "none",
+        transition: "background 0.12s",
+        userSelect: "none",
       }}
     >
-      {group.name}
-    </button>
+      <span style={{
+        flex: 1, fontSize: 13.5,
+        fontWeight: isSelected ? 500 : 400,
+        color: isSelected ? "var(--accent)" : "var(--t1)",
+      }}>
+        {label}
+      </span>
+      <svg
+        width="14" height="14" viewBox="0 0 24 24" fill="none"
+        stroke={isSelected ? "var(--accent)" : "var(--t3)"}
+        strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+        style={{ flexShrink: 0, transform: isSelected ? "rotate(180deg)" : "none", transition: "transform 0.2s" }}
+      >
+        <polyline points="6 9 12 15 18 9" />
+      </svg>
+    </div>
   );
 }
 
-function StudentRow({
-  student,
-  currentStatus,
-  disabled,
-  onChange,
-}: {
+function StudentRow({ student, currentStatus, disabled, hasBorder, onChange }: {
   student: Student;
   currentStatus: "present" | "absent" | "late" | undefined;
   disabled: boolean;
+  hasBorder: boolean;
   onChange: (val: "present" | "absent" | "late") => void;
 }) {
-  const [hovered, setHovered] = useState(false);
-  const tdBase: React.CSSProperties = {
-    padding: "11px 20px",
-    borderBottom: "1px solid var(--line)",
-    textAlign: "center",
-  };
   return (
-    <tr
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      style={{ background: hovered ? "var(--bg2)" : "transparent", transition: "background 0.1s" }}
-    >
-      <td style={{ ...tdBase, textAlign: "left", fontSize: 13, color: "var(--t1)" }}>
-        {student.full_name}
-      </td>
-      <td style={tdBase}>
-        <input
-          type="radio"
-          name={`a-${student.id}`}
-          disabled={disabled}
-          checked={currentStatus === "present"}
-          onChange={() => onChange("present")}
-          style={{ width: 15, height: 15, accentColor: "var(--accent)", cursor: disabled ? "default" : "pointer" }}
-        />
-      </td>
-      <td style={tdBase}>
-        <input
-          type="radio"
-          name={`a-${student.id}`}
-          disabled={disabled}
-          checked={currentStatus === "absent"}
-          onChange={() => onChange("absent")}
-          style={{ width: 15, height: 15, accentColor: "var(--err)", cursor: disabled ? "default" : "pointer" }}
-        />
-      </td>
-      <td style={tdBase}>
-        <input
-          type="radio"
-          name={`a-${student.id}`}
-          disabled={disabled}
-          checked={currentStatus === "late"}
-          onChange={() => onChange("late")}
-          style={{ width: 15, height: 15, accentColor: "var(--warn)", cursor: disabled ? "default" : "pointer" }}
-        />
-      </td>
-    </tr>
+    <div style={{
+      display: "flex", alignItems: "center",
+      padding: "10px 20px",
+      borderBottom: hasBorder ? "1px solid var(--line)" : "none",
+      background: "var(--bg)",
+    }}>
+      <span style={{ flex: 1, fontSize: 13, color: "var(--t1)" }}>{student.full_name}</span>
+      <div style={{ display: "flex", gap: 6 }}>
+        {STATUSES.map(({ value, label, color }) => {
+          const isActive = currentStatus === value;
+          return (
+            <button
+              key={value}
+              onClick={() => !disabled && onChange(value)}
+              style={{
+                padding: "4px 12px", borderRadius: 5,
+                fontSize: 12, fontWeight: isActive ? 600 : 400,
+                border: isActive ? "none" : "1px solid var(--line)",
+                background: isActive ? color : "transparent",
+                color: isActive ? "#fff" : "var(--t3)",
+                cursor: disabled ? "default" : "pointer",
+                transition: "all 0.12s",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }

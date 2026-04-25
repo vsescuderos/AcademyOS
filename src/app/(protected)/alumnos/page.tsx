@@ -17,7 +17,7 @@ export default async function AlumnosPage() {
 
   if (!profile || profile.role !== "director") redirect("/dashboard");
 
-  const [{ data: alumnos }, { data: groups }] = await Promise.all([
+  const [{ data: alumnos }, { data: groups }, { data: groupStudents }] = await Promise.all([
     supabase
       .from("students")
       .select("id, full_name, email, phone")
@@ -28,7 +28,28 @@ export default async function AlumnosPage() {
       .select("id, name, days, time_start, time_end")
       .eq("academy_id", profile.academy_id)
       .order("name"),
+    supabase
+      .from("group_students")
+      .select("student_id, group_id")
+      .eq("academy_id", profile.academy_id),
   ]);
 
-  return <AlumnosView alumnos={alumnos ?? []} groups={groups ?? []} />;
+  const groupsData = groups ?? [];
+  const groupMap = new Map(groupsData.map((g) => [g.id, g.name]));
+  const studentGroupsMap = new Map<string, { id: string; name: string }[]>();
+  for (const gs of groupStudents ?? []) {
+    const name = groupMap.get(gs.group_id);
+    if (name) {
+      const arr = studentGroupsMap.get(gs.student_id) ?? [];
+      arr.push({ id: gs.group_id, name });
+      studentGroupsMap.set(gs.student_id, arr);
+    }
+  }
+
+  const alumnosConGrupos = (alumnos ?? []).map((a) => ({
+    ...a,
+    groups: studentGroupsMap.get(a.id) ?? [],
+  }));
+
+  return <AlumnosView alumnos={alumnosConGrupos} groups={groupsData} />;
 }

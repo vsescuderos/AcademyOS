@@ -8,11 +8,8 @@ type Session = { id: string; date: string };
 type AttRecord = { student_id: string; status: string; students: { full_name: string } | null };
 
 const STATUS_LABEL: Record<string, string> = { present: "Presente", absent: "Ausente", late: "Tarde" };
-const STATUS_COLOR: Record<string, string> = {
-  present: "var(--ok)",
-  absent: "var(--err)",
-  late: "var(--warn)",
-};
+const STATUS_COLOR: Record<string, string> = { present: "var(--ok)", absent: "var(--err)", late: "var(--warn)" };
+const STATUS_BG: Record<string, string> = { present: "var(--ok-dim)", absent: "#fef2f2", late: "#fefce8" };
 
 export default function DirectorAsistenciaView({ groups }: { groups: Group[] }) {
   const [groupId, setGroupId] = useState<string | null>(null);
@@ -23,11 +20,11 @@ export default function DirectorAsistenciaView({ groups }: { groups: Group[] }) 
   const [loadingRecords, setLoadingRecords] = useState(false);
 
   async function pickGroup(id: string) {
-    if (id === groupId) return;
-    setGroupId(id);
-    setSessions(null);
-    setSessionId(null);
-    setRecords(null);
+    if (id === groupId) {
+      setGroupId(null); setSessions(null); setSessionId(null); setRecords(null);
+      return;
+    }
+    setGroupId(id); setSessions(null); setSessionId(null); setRecords(null);
     setLoadingSessions(true);
     const supabase = createClient();
     const { data } = await supabase
@@ -40,9 +37,11 @@ export default function DirectorAsistenciaView({ groups }: { groups: Group[] }) 
   }
 
   async function pickSession(id: string) {
-    if (id === sessionId) return;
-    setSessionId(id);
-    setRecords(null);
+    if (id === sessionId) {
+      setSessionId(null); setRecords(null);
+      return;
+    }
+    setSessionId(id); setRecords(null);
     setLoadingRecords(true);
     const supabase = createClient();
     const { data } = await supabase
@@ -76,71 +75,87 @@ export default function DirectorAsistenciaView({ groups }: { groups: Group[] }) 
       </div>
 
       <div style={{ flex: 1, overflowY: "auto", padding: "24px 28px" }}>
-        <Section label="Grupos">
-          {groups.length === 0
-            ? <p style={{ fontSize: 13, color: "var(--t3)" }}>No hay grupos en esta academia.</p>
-            : groups.map((g) => (
-              <NavButton key={g.id} label={g.name} active={groupId === g.id} onClick={() => pickGroup(g.id)} />
-            ))
-          }
-        </Section>
-
-        {groupId && (
-          <Section label="Sesiones">
-            {loadingSessions
-              ? <p style={{ fontSize: 13, color: "var(--t3)" }}>Cargando…</p>
-              : sessions?.length === 0
-                ? <p style={{ fontSize: 13, color: "var(--t3)" }}>Sin sesiones registradas.</p>
-                : sessions?.map((s) => (
-                  <NavButton
-                    key={s.id}
-                    label={formatDate(s.date)}
-                    active={sessionId === s.id}
-                    onClick={() => pickSession(s.id)}
+        {groups.length === 0 ? (
+          <p style={{ fontSize: 13, color: "var(--t3)" }}>No hay grupos en esta academia.</p>
+        ) : (
+          <div style={{ border: "1px solid var(--line)", borderRadius: 10, overflow: "hidden" }}>
+            {groups.map((g, gi) => {
+              const isGroupSelected = groupId === g.id;
+              const isLastGroup = gi === groups.length - 1;
+              return (
+                <div key={g.id}>
+                  <ExpandRow
+                    label={g.name}
+                    isSelected={isGroupSelected}
+                    hasBorder={!isLastGroup || isGroupSelected}
+                    indent={0}
+                    onClick={() => pickGroup(g.id)}
                   />
-                ))
-            }
-          </Section>
-        )}
 
-        {sessionId && (
-          <div>
-            {loadingRecords
-              ? <p style={{ fontSize: 13, color: "var(--t3)" }}>Cargando…</p>
-              : records && (
-                records.length === 0
-                  ? <p style={{ fontSize: 13, color: "var(--t3)" }}>Sin registros en esta sesión.</p>
-                  : (
-                    <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                      <thead>
-                        <tr style={{ background: "var(--bg2)" }}>
-                          {["Alumno", "Estado"].map((col) => (
-                            <th key={col} style={{
-                              textAlign: "left", padding: "9px 20px", fontSize: 11, fontWeight: 600,
-                              color: "var(--t3)", textTransform: "uppercase", letterSpacing: "0.06em",
-                              borderBottom: "1px solid var(--line)",
-                            }}>
-                              {col}
-                            </th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {records.map((r) => (
-                          <tr key={r.student_id}>
-                            <td style={{ padding: "11px 20px", borderBottom: "1px solid var(--line)", fontSize: 13, color: "var(--t1)" }}>
-                              {r.students?.full_name ?? "—"}
-                            </td>
-                            <td style={{ padding: "11px 20px", borderBottom: "1px solid var(--line)", fontSize: 13, fontWeight: 500, color: STATUS_COLOR[r.status] ?? "var(--t2)" }}>
-                              {STATUS_LABEL[r.status] ?? r.status}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  )
-              )
-            }
+                  {isGroupSelected && (
+                    <div style={{ borderBottom: isLastGroup ? "none" : "1px solid var(--line)" }}>
+                      {loadingSessions ? (
+                        <p style={{ padding: "16px 24px", fontSize: 13, color: "var(--t3)" }}>
+                          Cargando sesiones…
+                        </p>
+                      ) : sessions?.length === 0 ? (
+                        <p style={{ padding: "16px 24px", fontSize: 13, color: "var(--t3)" }}>
+                          Sin sesiones registradas.
+                        </p>
+                      ) : (
+                        sessions?.map((s, si) => {
+                          const isSessionSelected = sessionId === s.id;
+                          const isLastSession = si === (sessions?.length ?? 0) - 1;
+                          return (
+                            <div key={s.id}>
+                              <ExpandRow
+                                label={formatDate(s.date)}
+                                isSelected={isSessionSelected}
+                                hasBorder={!isLastSession || isSessionSelected}
+                                indent={20}
+                                onClick={() => pickSession(s.id)}
+                              />
+
+                              {isSessionSelected && (
+                                <div style={{ borderBottom: isLastSession ? "none" : "1px solid var(--line)" }}>
+                                  {loadingRecords ? (
+                                    <p style={{ padding: "14px 44px", fontSize: 13, color: "var(--t3)" }}>
+                                      Cargando…
+                                    </p>
+                                  ) : !records ? null : records.length === 0 ? (
+                                    <p style={{ padding: "14px 44px", fontSize: 13, color: "var(--t3)" }}>
+                                      Sin registros en esta sesión.
+                                    </p>
+                                  ) : records.map((r, ri) => (
+                                    <div key={r.student_id} style={{
+                                      display: "flex", alignItems: "center",
+                                      padding: "10px 44px",
+                                      borderBottom: ri < records.length - 1 ? "1px solid var(--line)" : "none",
+                                      background: "var(--bg)",
+                                    }}>
+                                      <span style={{ flex: 1, fontSize: 13, color: "var(--t1)" }}>
+                                        {r.students?.full_name ?? "—"}
+                                      </span>
+                                      <span style={{
+                                        fontSize: 11, fontWeight: 600, padding: "3px 9px", borderRadius: 4,
+                                        background: STATUS_BG[r.status] ?? "var(--bg2)",
+                                        color: STATUS_COLOR[r.status] ?? "var(--t3)",
+                                      }}>
+                                        {STATUS_LABEL[r.status] ?? r.status}
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
@@ -148,39 +163,48 @@ export default function DirectorAsistenciaView({ groups }: { groups: Group[] }) 
   );
 }
 
-function Section({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div style={{ marginBottom: 24 }}>
-      <div style={{
-        fontSize: 10, fontWeight: 600, color: "var(--t3)",
-        textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10,
-      }}>
-        {label}
-      </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        {children}
-      </div>
-    </div>
-  );
-}
-
-function NavButton({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+function ExpandRow({ label, isSelected, hasBorder, indent, onClick }: {
+  label: string;
+  isSelected: boolean;
+  hasBorder: boolean;
+  indent: number;
+  onClick: () => void;
+}) {
   const [hovered, setHovered] = useState(false);
   return (
-    <button
+    <div
       onClick={onClick}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
-        textAlign: "left", padding: "10px 14px", borderRadius: 6, fontSize: 13,
-        fontWeight: active ? 500 : 400, cursor: "pointer",
-        border: `1px solid ${active ? "var(--accent-border)" : hovered ? "#d1d5db" : "var(--line)"}`,
-        background: active ? "var(--accent-light)" : "var(--bg)",
-        color: active ? "var(--accent)" : "var(--t1)",
-        transition: "all 0.12s",
+        display: "flex", alignItems: "center",
+        paddingTop: 12, paddingBottom: 12,
+        paddingLeft: 20 + indent, paddingRight: 20,
+        cursor: "pointer",
+        background: isSelected ? "var(--accent-light)" : hovered ? "var(--bg2)" : indent > 0 ? "var(--bg2)" : "var(--bg)",
+        borderLeft: `3px solid ${isSelected ? "var(--accent)" : "transparent"}`,
+        borderBottom: hasBorder ? "1px solid var(--line)" : "none",
+        transition: "background 0.12s",
+        userSelect: "none",
       }}
     >
-      {label}
-    </button>
+      <span style={{
+        flex: 1,
+        fontSize: indent > 0 ? 13 : 13.5,
+        fontWeight: isSelected ? 500 : 400,
+        color: isSelected ? "var(--accent)" : indent > 0 ? "var(--t2)" : "var(--t1)",
+        textTransform: indent > 0 ? "capitalize" : "none",
+      }}>
+        {label}
+      </span>
+      <svg
+        width="13" height="13" viewBox="0 0 24 24" fill="none"
+        stroke={isSelected ? "var(--accent)" : "var(--t3)"}
+        strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+        style={{ flexShrink: 0, transform: isSelected ? "rotate(180deg)" : "none", transition: "transform 0.2s" }}
+      >
+        <polyline points="6 9 12 15 18 9" />
+      </svg>
+    </div>
   );
 }

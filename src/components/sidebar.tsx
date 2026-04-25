@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { logout } from "@/actions/auth";
 
 function initials(name: string) {
@@ -149,33 +150,16 @@ export default function Sidebar({
       }}
     >
       {/* Logo */}
-      <div style={{ padding: "22px 20px 20px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
-          <div
-            style={{
-              width: 30,
-              height: 30,
-              borderRadius: 7,
-              background: "var(--accent)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="white">
-              <path d="M12 3L1 9l11 6 9-4.91V17h2V9M5 13.18v4L12 21l7-3.82v-4L12 17l-7-3.82z" />
-            </svg>
-          </div>
-          <span
-            style={{
-              color: "#ffffff",
-              fontWeight: 600,
-              fontSize: 15,
-              letterSpacing: "-0.01em",
-            }}
-          >
-            AcademyOS
-          </span>
+      <div style={{ padding: "16px 14px 14px" }}>
+        <div style={{ background: "#ffffff", borderRadius: 8, padding: "0 16px", height: 52, overflow: "hidden", display: "flex", alignItems: "center" }}>
+          <Image
+            src="/logo.png"
+            alt="AcademyOS"
+            width={1335}
+            height={669}
+            style={{ display: "block", width: "100%", height: "auto", flexShrink: 0 }}
+            priority
+          />
         </div>
       </div>
 
