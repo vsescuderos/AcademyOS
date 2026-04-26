@@ -44,6 +44,24 @@ function formatReceiptNumber(n: number | null): string {
   return "REC-" + String(n).padStart(4, "0");
 }
 
+const MESES = ["Enero","Febrero","Marzo","Abril","Mayo","Junio",
+               "Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+
+function buildMonthOptions(): string[] {
+  const now = new Date();
+  const opts: string[] = [];
+  for (let off = -6; off <= 3; off++) {
+    const d = new Date(now.getFullYear(), now.getMonth() + off, 1);
+    opts.push(`Mensualidad ${MESES[d.getMonth()]} ${d.getFullYear()}`);
+  }
+  return opts;
+}
+
+function currentMonthConcept(): string {
+  const now = new Date();
+  return `Mensualidad ${MESES[now.getMonth()]} ${now.getFullYear()}`;
+}
+
 export default function CobrosProfesorView({ students, todayCobros }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -51,7 +69,7 @@ export default function CobrosProfesorView({ students, todayCobros }: Props) {
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [showDropdown, setShowDropdown] = useState(false);
   const [amount, setAmount] = useState("");
-  const [concept, setConcept] = useState("");
+  const [concept, setConcept] = useState(currentMonthConcept);
   const [method, setMethod] = useState<"cash" | "card">("cash");
   const [notes, setNotes] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -119,7 +137,7 @@ export default function CobrosProfesorView({ students, todayCobros }: Props) {
       setSelectedStudent(null);
       setSearch("");
       setAmount("");
-      setConcept("");
+      setConcept(currentMonthConcept());
       setNotes("");
       setMethod("cash");
       router.refresh();
@@ -201,12 +219,15 @@ export default function CobrosProfesorView({ students, todayCobros }: Props) {
             {/* Concept */}
             <div>
               <label style={labelStyle}>Concepto</label>
-              <input
+              <select
                 value={concept}
                 onChange={e => setConcept(e.target.value)}
-                placeholder="Ej. Mensualidad abril"
                 style={inputStyle}
-              />
+              >
+                {buildMonthOptions().map(opt => (
+                  <option key={opt} value={opt}>{opt}</option>
+                ))}
+              </select>
             </div>
 
             {/* Method */}

@@ -50,14 +50,24 @@ export async function POST(req: NextRequest) {
 
   if (!student) return NextResponse.json({ error: "Alumno no encontrado" }, { status: 404 });
 
-  // Get academy data (name + phone for PDF)
-  const { data: academy } = await admin
+  // Get academy name (always exists)
+  const { data: academy, error: academyError } = await admin
     .from("academies")
-    .select("name, phone")
+    .select("name")
     .eq("id", academyId)
     .single();
 
-  if (!academy) return NextResponse.json({ error: "Academia no encontrada" }, { status: 404 });
+  if (academyError || !academy) {
+    return NextResponse.json({ error: "Academia no encontrada: " + (academyError?.message ?? "") }, { status: 404 });
+  }
+
+  // Get phone separately — column added in migration 013, tolerate if missing
+  const { data: phoneRow } = await admin
+    .from("academies")
+    .select("phone")
+    .eq("id", academyId)
+    .single();
+  const academyPhone: string | null = (phoneRow as { phone?: string | null } | null)?.phone ?? null;
 
   // Atomic receipt number
   const { data: seqData, error: seqError } = await admin
@@ -73,7 +83,7 @@ export async function POST(req: NextRequest) {
   const pdfBuffer = await generateReceiptPdf({
     receiptNumber,
     academyName: academy.name,
-    academyPhone: academy.phone ?? null,
+    academyPhone,
     studentName: student.full_name,
     amount: body.amount,
     concept: body.concept,
