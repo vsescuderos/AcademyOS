@@ -92,9 +92,7 @@ export async function POST(req: NextRequest) {
     });
   } catch (e) {
     console.error("[attendance-excel]", e);
-    return NextResponse.json(
-      { error: "Error al generar el informe." },
-      { status: 500 }
-    );
+    const msg = e instanceof Error ? e.message : "Error al generar el informe.";
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }
