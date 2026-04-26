@@ -59,13 +59,13 @@ export default function AlumnosView({ alumnos, groups }: { alumnos: Alumno[]; gr
   const [search, setSearch] = useState("");
 
   const filteredAlumnos = alumnos.filter((a) => {
-    if (showSinGrupo) return a.groups.length === 0;
-    if (search.trim()) return a.full_name.toLowerCase().includes(search.toLowerCase().trim());
+    if (showSinGrupo && a.groups.length > 0) return false;
+    if (search.trim() && !a.full_name.toLowerCase().includes(search.toLowerCase().trim())) return false;
     return true;
   });
 
-  function handleSearch(val: string) { setSearch(val); if (val.trim()) setShowSinGrupo(false); }
-  function toggleSinGrupo() { if (!showSinGrupo) setSearch(""); setShowSinGrupo((v) => !v); }
+  function handleSearch(val: string) { setSearch(val); }
+  function toggleSinGrupo() { setShowSinGrupo((v) => !v); }
 
   function openPanel(p: "alumno" | "excel") {
     setPanel((prev) => (prev === p ? "none" : p));

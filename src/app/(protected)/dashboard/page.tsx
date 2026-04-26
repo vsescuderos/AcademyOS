@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { redirect } from "next/navigation";
 import HomeView from "./home-view";
+import { DAY_KEYS } from "@/lib/constants";
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -53,7 +54,6 @@ export default async function DashboardPage() {
   let allGroups: { id: string; name: string }[] = [];
 
   if (activeAcademyId) {
-    const DAY_KEYS = ["domingo", "lunes", "martes", "miercoles", "jueves", "viernes", "sabado"];
     const todayKey = DAY_KEYS[new Date().getDay()];
     const todayStr = new Date().toISOString().slice(0, 10);
 

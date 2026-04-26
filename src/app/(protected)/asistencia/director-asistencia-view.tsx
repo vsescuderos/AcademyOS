@@ -2,14 +2,11 @@
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { STATUS_LABEL, STATUS_COLOR, STATUS_BG } from "@/lib/constants";
 
 type Group = { id: string; name: string };
 type Session = { id: string; date: string };
 type AttRecord = { student_id: string; status: string; students: { full_name: string } | null };
-
-const STATUS_LABEL: Record<string, string> = { present: "Presente", absent: "Ausente", late: "Tarde" };
-const STATUS_COLOR: Record<string, string> = { present: "var(--ok)", absent: "var(--err)", late: "var(--warn)" };
-const STATUS_BG: Record<string, string> = { present: "var(--ok-dim)", absent: "#fef2f2", late: "#fefce8" };
 
 export default function DirectorAsistenciaView({ groups }: { groups: Group[] }) {
   const [groupId, setGroupId] = useState<string | null>(null);

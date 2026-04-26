@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import AsistenciaView from "./asistencia-view";
 import DirectorAsistenciaView from "./director-asistencia-view";
+import { DAY_KEYS } from "@/lib/constants";
 
 export default async function AsistenciaPage() {
   const supabase = await createClient();
@@ -26,7 +27,6 @@ export default async function AsistenciaPage() {
 
   if (profile.role !== "profesor") redirect("/dashboard");
 
-  const DAY_KEYS = ["domingo", "lunes", "martes", "miercoles", "jueves", "viernes", "sabado"];
   const todayKey = DAY_KEYS[new Date().getDay()];
 
   const { data: groups } = await supabase

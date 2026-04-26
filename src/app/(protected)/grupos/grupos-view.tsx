@@ -4,16 +4,7 @@ import { useState, useEffect, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { crearGrupo, eliminarGrupo, actualizarGrupo, actualizarAlumnosGrupo } from "@/actions/director";
 import ExcelImportPanel from "./excel-import";
-
-const DAYS = [
-  { key: "lunes", short: "L" },
-  { key: "martes", short: "M" },
-  { key: "miercoles", short: "X" },
-  { key: "jueves", short: "J" },
-  { key: "viernes", short: "V" },
-  { key: "sabado", short: "S" },
-  { key: "domingo", short: "D" },
-];
+import { DAYS } from "@/lib/constants";
 
 type Group = {
   id: string; name: string; days: string[];
@@ -92,6 +83,10 @@ export default function GruposView({ groups, profesores, students }: {
   function handleCrearGrupo() {
     if (!groupForm.name.trim() || groupForm.days.length === 0) {
       setGroupError("El nombre y al menos un día son obligatorios.");
+      return;
+    }
+    if (groupForm.time_start && groupForm.time_end && groupForm.time_end <= groupForm.time_start) {
+      setGroupError("La hora de fin debe ser posterior a la hora de inicio.");
       return;
     }
     startTransition(async () => {
@@ -270,6 +265,9 @@ function GroupRow({ group, profesores, students, expanded, isLast, onToggle, onR
 
   async function handleSave() {
     if (!editForm.name.trim()) { setEditError("El nombre es obligatorio."); return; }
+    if (editForm.time_start && editForm.time_end && editForm.time_end <= editForm.time_start) {
+      setEditError("La hora de fin debe ser posterior a la hora de inicio."); return;
+    }
     if (editForm.student_ids.length > editForm.max_students) {
       setEditError(`Máximo ${editForm.max_students} alumnos. Has seleccionado ${editForm.student_ids.length}.`);
       return;

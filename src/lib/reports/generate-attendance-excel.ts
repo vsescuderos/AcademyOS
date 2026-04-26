@@ -236,13 +236,16 @@ export async function generateAttendanceExcel(
   if (inicioWs) {
     const inicioRows: (string | number | null)[][] = [];
     for (const g of groupMap.values()) {
-      let present = 0, total = 0;
+      let attended = 0, total = 0;
       for (const s of g.sessions)
-        for (const r of s.records) { total++; if (r.status === "present") present++; }
+        for (const r of s.records) {
+          total++;
+          if (r.status === "present" || r.status === "late") attended++;
+        }
       inicioRows.push([
         g.name,
         g.sessions.length,
-        total > 0 ? `${Math.round((present / total) * 100)}%` : "—",
+        total > 0 ? `${Math.round((attended / total) * 100)}%` : "—",
       ]);
     }
     fillSheet(inicioWs, ["Grupo", "Sesiones totales", "% Asistencia"], inicioRows);
@@ -274,33 +277,36 @@ export async function generateAttendanceExcel(
     // (% is pinned at column E so it stays visible when scrolling through dates)
     const dataRows: (string | number | null)[][] = [];
     for (const [sid, sname] of students) {
-      let present = 0, total = 0;
+      let present = 0, late = 0, total = 0;
       const attendances: (string | null)[] = [];
       for (const s of g.sessions) {
         const rec = s.records.find((r) => r.student_id === sid);
         if (rec) {
           total++;
           if (rec.status === "present") present++;
+          else if (rec.status === "late") late++;
           attendances.push(STATUS_ES[rec.status] ?? rec.status);
         } else {
           attendances.push("—");
         }
       }
-      const pct = total > 0 ? `${Math.round((present / total) * 100)}%` : "—";
-      dataRows.push([sname, pct, ...attendances]);
+      const attended = present + late;
+      const pctAsistencia = total > 0 ? `${Math.round((attended / total) * 100)}%` : "—";
+      const pctPuntualidad = attended > 0 ? `${Math.round((present / attended) * 100)}%` : "—";
+      dataRows.push([sname, pctAsistencia, pctPuntualidad, ...attendances]);
     }
 
     const sheetName = makeSheetName(g.name, usedNames);
     const groupWs = cloneWorksheet(wb, groupTemplateWs!, sheetName);
 
-    const header = ["Alumno", "% Asistencia", ...dates];
+    const header = ["Alumno", "% Asistencia", "% Puntualidad", ...dates];
     fillSheet(groupWs, header, dataRows);
     addLogo(groupWs, logoId);
 
-    // Auto-fit date columns (F onwards, ci >= 2 relative to startCol)
+    // Auto-fit date columns only (ci >= 3: skip Alumno, % Asistencia, % Puntualidad)
     const headerPos = findHeader(groupWs);
     if (headerPos) {
-      for (let ci = 2; ci < header.length; ci++) {
+      for (let ci = 3; ci < header.length; ci++) {
         let maxLen = header[ci].length;
         for (const row of dataRows) {
           const val = row[ci];

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { confirmarAsistencia } from "@/actions/asistencia";
+import { ATTENDANCE_STATUSES } from "@/lib/constants";
 
 type Group = { id: string; name: string };
 type Student = { id: string; full_name: string };
@@ -13,11 +14,7 @@ type GroupState =
   | { status: "pending"; students: Student[] }
   | { status: "confirmed"; students: Student[]; records: AttendanceMap };
 
-const STATUSES: Array<{ value: "present" | "absent" | "late"; label: string; color: string }> = [
-  { value: "present", label: "Presente", color: "var(--ok)" },
-  { value: "absent", label: "Ausente", color: "var(--err)" },
-  { value: "late", label: "Tarde", color: "var(--warn)" },
-];
+const STATUSES = ATTENDANCE_STATUSES;
 
 export default function AsistenciaView({ groups }: { groups: Group[] }) {
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
