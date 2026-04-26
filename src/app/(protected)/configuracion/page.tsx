@@ -15,16 +15,33 @@ export default async function ConfiguracionPage() {
     .single();
 
   if (!profile || profile.role !== "director") redirect("/dashboard");
-  if (!profile.academy_id) redirect("/dashboard");
+
+  // Fetch all academy IDs this director owns
+  const { data: links } = await supabase
+    .from("director_academies")
+    .select("academy_id")
+    .eq("director_id", user.id);
+
+  const academyIds = links?.map((l) => l.academy_id) ?? [];
 
   const admin = createAdminClient();
-  const { data: academy } = await admin
-    .from("academies")
-    .select("id, name, phone")
-    .eq("id", profile.academy_id)
-    .single();
+  let allAcademies: { id: string; name: string; phone: string | null; created_at: string }[] = [];
+  if (academyIds.length > 0) {
+    const { data } = await admin
+      .from("academies")
+      .select("id, name, phone, created_at")
+      .in("id", academyIds)
+      .order("created_at");
+    allAcademies = (data ?? []).map(a => ({ ...a, phone: a.phone ?? null }));
+  }
 
-  if (!academy) redirect("/dashboard");
+  const activeAcademyId = profile.academy_id as string | null;
+  const activeAcademy = allAcademies.find(a => a.id === activeAcademyId) ?? null;
 
-  return <ConfiguracionView academy={academy} />;
+  return (
+    <ConfiguracionView
+      activeAcademy={activeAcademy}
+      allAcademies={allAcademies}
+    />
+  );
 }

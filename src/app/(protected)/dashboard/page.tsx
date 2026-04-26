@@ -1,5 +1,4 @@
 import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
 import { redirect } from "next/navigation";
 import HomeView from "./home-view";
 import { DAY_KEYS } from "@/lib/constants";
@@ -21,30 +20,7 @@ export default async function DashboardPage() {
   if (profile?.role === "profesor") redirect("/asistencia");
   if (!profile || profile.role !== "director") redirect("/login");
 
-  // Fetch all academy IDs this director has access to
-  const { data: links } = await supabase
-    .from("director_academies")
-    .select("academy_id")
-    .eq("director_id", user.id);
-
-  const academyIds = links?.map((l) => l.academy_id) ?? [];
-
-  // Use admin client: RLS on academies only shows the active one,
-  // but here we need all of the director's academies
-  const admin = createAdminClient();
-  let allAcademies: { id: string; name: string; created_at: string }[] = [];
-  if (academyIds.length > 0) {
-    const { data } = await admin
-      .from("academies")
-      .select("id, name, created_at")
-      .in("id", academyIds)
-      .order("created_at");
-    allAcademies = data ?? [];
-  }
-
   const activeAcademyId = profile.academy_id as string | null;
-  const activeAcademy =
-    allAcademies.find((a) => a.id === activeAcademyId) ?? null;
 
   let groupCount = 0;
   let professorCount = 0;
@@ -125,8 +101,7 @@ export default async function DashboardPage() {
 
   return (
     <HomeView
-      activeAcademy={activeAcademy}
-      allAcademies={allAcademies}
+      hasAcademy={!!activeAcademyId}
       groupCount={groupCount}
       professorCount={professorCount}
       studentCount={studentCount}
