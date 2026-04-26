@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import * as XLSX from "xlsx";
 import { fetchAttendanceReportData, ReportSession } from "@/actions/reports";
+import { fillTemplateSheet } from "./excel-utils";
 
 type Group = { id: string; name: string };
 type Period = "mes" | "trimestre" | "curso" | "personalizado";
@@ -44,9 +45,11 @@ function makeSheetName(base: string, used: Set<string>): string {
   }
 }
 
-function generateExcel(sessions: ReportSession[], label: string) {
-  const wb = XLSX.utils.book_new();
-  const usedNames = new Set<string>();
+async function generateExcel(sessions: ReportSession[], label: string) {
+  const resp = await fetch("/plantillas/informe-asistencia.xlsx");
+  if (!resp.ok) throw new Error("No se pudo cargar la plantilla de informe.");
+  const buffer = await resp.arrayBuffer();
+  const wb = XLSX.read(new Uint8Array(buffer), { type: "array", cellStyles: true });
 
   const statusES = (st: string) =>
     st === "present" ? "Presente" : st === "absent" ? "Ausente" : "Tarde";
@@ -59,36 +62,56 @@ function generateExcel(sessions: ReportSession[], label: string) {
   }
   for (const g of groupMap.values()) g.sessions.sort((a, b) => a.date.localeCompare(b.date));
 
-  // ── Hoja "Inicio": resumen por grupo ───────────────────────────────────────
-  const inicio: unknown[][] = [["Grupo", "Sesiones totales", "% Asistencia"]];
+  // ── Hoja "Inicio": rellenar plantilla con datos reales ────────────────────
+  const inicioRows: (string | number | null)[][] = [];
   for (const g of groupMap.values()) {
     let present = 0, total = 0;
     for (const s of g.sessions) for (const r of s.records) { total++; if (r.status === "present") present++; }
-    inicio.push([g.name, g.sessions.length, total > 0 ? `${Math.round((present / total) * 100)}%` : "—"]);
+    inicioRows.push([g.name, g.sessions.length, total > 0 ? `${Math.round((present / total) * 100)}%` : "—"]);
   }
-  usedNames.add("Inicio");
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(inicio), "Inicio");
+  wb.Sheets["Inicio"] = fillTemplateSheet(
+    wb.Sheets["Inicio"],
+    ["Grupo", "Sesiones totales", "% Asistencia"],
+    inicioRows
+  );
+
+  // Usar la primera hoja de grupo de la plantilla como base de formato
+  const groupTemplateName = wb.SheetNames.find(n => n !== "Inicio");
+  const groupTemplate = groupTemplateName ? wb.Sheets[groupTemplateName] : wb.Sheets["Inicio"];
+
+  // Eliminar las hojas de ejemplo de la plantilla
+  for (const name of wb.SheetNames.filter(n => n !== "Inicio")) delete wb.Sheets[name];
+  wb.SheetNames = ["Inicio"];
 
   // ── Una hoja por grupo: alumno | fecha1 | fecha2 | … | % Asistencia ───────
+  const usedNames = new Set<string>(["Inicio"]);
   for (const g of groupMap.values()) {
     const dates = g.sessions.map(s => s.date);
     const studentMap = new Map<string, string>();
     for (const s of g.sessions) for (const r of s.records) studentMap.set(r.student_id, r.student_name);
     const students = [...studentMap.entries()].sort((a, b) => a[1].localeCompare(b[1]));
 
-    const pivot: unknown[][] = [["Alumno", ...dates, "% Asistencia"]];
+    const dataRows: (string | number | null)[][] = [];
     for (const [sid, sname] of students) {
       let present = 0, total = 0;
-      const row: unknown[] = [sname];
+      const row: (string | number | null)[] = [sname];
       for (const s of g.sessions) {
         const rec = s.records.find(r => r.student_id === sid);
         if (rec) { total++; if (rec.status === "present") present++; row.push(statusES(rec.status)); }
         else { row.push("—"); }
       }
       row.push(total > 0 ? `${Math.round((present / total) * 100)}%` : "—");
-      pivot.push(row);
+      dataRows.push(row);
     }
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(pivot), makeSheetName(g.name, usedNames));
+
+    const sheetName = makeSheetName(g.name, usedNames);
+    wb.Sheets[sheetName] = fillTemplateSheet(
+      groupTemplate,
+      ["Alumno", ...dates, "% Asistencia"],
+      dataRows,
+      `Asistencia de ${g.name}`
+    );
+    wb.SheetNames.push(sheetName);
   }
 
   XLSX.writeFile(wb, `informe-asistencia-${label}.xlsx`);
@@ -119,7 +142,11 @@ export default function InformeAsistencia({ groups, onClose }: Props) {
       if (result.error) { setError(result.error); return; }
       if (!result.data || result.data.sessions.length === 0) { setError("No hay datos de asistencia en el período seleccionado."); return; }
       const label = period === "personalizado" ? `${start}_${end}` : period;
-      generateExcel(result.data.sessions, label);
+      try {
+        await generateExcel(result.data.sessions, label);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Error al generar el informe.");
+      }
     });
   }
 
