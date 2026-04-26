@@ -69,13 +69,16 @@ async function generateExcel(sessions: ReportSession[], label: string) {
     for (const s of g.sessions) for (const r of s.records) { total++; if (r.status === "present") present++; }
     inicioRows.push([g.name, g.sessions.length, total > 0 ? `${Math.round((present / total) * 100)}%` : "—"]);
   }
-  wb.Sheets["Inicio"] = fillTemplateSheet(
+  // Modify "Inicio" IN PLACE so drawing references (images) remain bound to wb
+  fillTemplateSheet(
     wb.Sheets["Inicio"],
     ["Grupo", "Sesiones totales", "% Asistencia"],
-    inicioRows
+    inicioRows,
+    undefined,
+    true
   );
 
-  // Usar la primera hoja de grupo de la plantilla como base de formato
+  // Keep a reference to the first group template sheet BEFORE removing it
   const groupTemplateName = wb.SheetNames.find(n => n !== "Inicio");
   const groupTemplate = groupTemplateName ? wb.Sheets[groupTemplateName] : wb.Sheets["Inicio"];
 
