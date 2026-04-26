@@ -101,7 +101,7 @@ export default function HomeView({
 
   function handleEdit() {
     if (!editName.trim()) return;
-    run(() => actualizarAcademia(editName.trim()), () => setEditing(false));
+    run(() => actualizarAcademia({ name: editName.trim() }), () => setEditing(false));
   }
 
   function handleDelete() {

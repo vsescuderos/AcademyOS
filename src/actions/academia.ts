@@ -59,18 +59,22 @@ export async function crearAcademia(
 }
 
 export async function actualizarAcademia(
-  name: string
+  params: { name: string; phone?: string | null }
 ): Promise<{ error?: string }> {
   const ctx = await getDirectorUser();
   if (!ctx || !ctx.profile.academy_id) return { error: "Sin permiso" };
 
+  const update: { name: string; phone?: string | null } = { name: params.name };
+  if ("phone" in params) update.phone = params.phone ?? null;
+
   const { error } = await ctx.supabase
     .from("academies")
-    .update({ name })
+    .update(update)
     .eq("id", ctx.profile.academy_id);
 
   if (error) return { error: error.message };
   revalidatePath("/dashboard");
+  revalidatePath("/configuracion");
   return {};
 }
 

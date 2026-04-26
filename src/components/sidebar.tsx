@@ -132,8 +132,12 @@ export default function Sidebar({
     { href: "/profesores", label: "Profesores" },
     { href: "/alumnos", label: "Alumnos" },
     { href: "/asistencia", label: "Asistencia" },
+    { href: "/cobros", label: "Cobros" },
   ];
-  const profesorNav = [{ href: "/asistencia", label: "Asistencia" }];
+  const profesorNav = [
+    { href: "/asistencia", label: "Asistencia" },
+    { href: "/cobros", label: "Cobros" },
+  ];
   const navItems = role === "profesor" ? profesorNav : directorNav;
 
   return (
@@ -190,14 +194,14 @@ export default function Sidebar({
         ))}
       </nav>
 
-      {/* User */}
-      <div
-        style={{
-          padding: "12px 10px",
-          borderTop: "1px solid rgba(255,255,255,0.08)",
-        }}
-      >
-        <UserButton userName={userName} userEmail={userEmail} role={role} />
+      {/* Bottom: Configuración (director only) + User */}
+      <div style={{ padding: "8px 10px", borderTop: "1px solid rgba(255,255,255,0.08)" }}>
+        {role === "director" && (
+          <SidebarLink href="/configuracion" label="Configuración" />
+        )}
+        <div style={{ marginTop: 4 }}>
+          <UserButton userName={userName} userEmail={userEmail} role={role} />
+        </div>
       </div>
     </aside>
   );
