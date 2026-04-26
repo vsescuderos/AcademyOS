@@ -48,66 +48,48 @@ function generateExcel(sessions: ReportSession[], label: string) {
   const wb = XLSX.utils.book_new();
   const usedNames = new Set<string>();
 
-  // Resumen por grupo
-  const groupMap = new Map<string, { name: string; sessions: number; present: number; absent: number; late: number }>();
+  const statusES = (st: string) =>
+    st === "present" ? "Presente" : st === "absent" ? "Ausente" : "Tarde";
+
+  // Agrupar sesiones por grupo, ordenadas por fecha
+  const groupMap = new Map<string, { name: string; sessions: ReportSession[] }>();
   for (const s of sessions) {
-    if (!groupMap.has(s.group_id)) groupMap.set(s.group_id, { name: s.group_name, sessions: 0, present: 0, absent: 0, late: 0 });
-    const g = groupMap.get(s.group_id)!;
-    g.sessions++;
-    for (const r of s.records) {
-      if (r.status === "present") g.present++;
-      else if (r.status === "absent") g.absent++;
-      else g.late++;
-    }
+    if (!groupMap.has(s.group_id)) groupMap.set(s.group_id, { name: s.group_name, sessions: [] });
+    groupMap.get(s.group_id)!.sessions.push(s);
   }
-  const resumen: unknown[][] = [["Grupo", "Sesiones", "Presentes", "Ausentes", "Tardanzas", "% Asistencia"]];
+  for (const g of groupMap.values()) g.sessions.sort((a, b) => a.date.localeCompare(b.date));
+
+  // ── Hoja "Inicio": resumen por grupo ───────────────────────────────────────
+  const inicio: unknown[][] = [["Grupo", "Sesiones totales", "% Asistencia"]];
   for (const g of groupMap.values()) {
-    const total = g.present + g.absent + g.late;
-    resumen.push([g.name, g.sessions, g.present, g.absent, g.late, total > 0 ? `${Math.round((g.present / total) * 100)}%` : "—"]);
+    let present = 0, total = 0;
+    for (const s of g.sessions) for (const r of s.records) { total++; if (r.status === "present") present++; }
+    inicio.push([g.name, g.sessions.length, total > 0 ? `${Math.round((present / total) * 100)}%` : "—"]);
   }
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(resumen), makeSheetName("Resumen", usedNames));
+  usedNames.add("Inicio");
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(inicio), "Inicio");
 
-  // Por alumno
-  const sgMap = new Map<string, { name: string; group: string; present: number; absent: number; late: number }>();
-  for (const s of sessions) {
-    for (const r of s.records) {
-      const key = `${r.student_id}|${s.group_id}`;
-      if (!sgMap.has(key)) sgMap.set(key, { name: r.student_name, group: s.group_name, present: 0, absent: 0, late: 0 });
-      const sg = sgMap.get(key)!;
-      if (r.status === "present") sg.present++;
-      else if (r.status === "absent") sg.absent++;
-      else sg.late++;
-    }
-  }
-  const porAlumno: unknown[][] = [["Alumno", "Grupo", "Presentes", "Ausentes", "Tardanzas", "% Asistencia"]];
-  for (const sg of [...sgMap.values()].sort((a, b) => a.group.localeCompare(b.group) || a.name.localeCompare(b.name))) {
-    const total = sg.present + sg.absent + sg.late;
-    porAlumno.push([sg.name, sg.group, sg.present, sg.absent, sg.late, total > 0 ? `${Math.round((sg.present / total) * 100)}%` : "—"]);
-  }
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(porAlumno), makeSheetName("Por alumno", usedNames));
+  // ── Una hoja por grupo: alumno | fecha1 | fecha2 | … | % Asistencia ───────
+  for (const g of groupMap.values()) {
+    const dates = g.sessions.map(s => s.date);
+    const studentMap = new Map<string, string>();
+    for (const s of g.sessions) for (const r of s.records) studentMap.set(r.student_id, r.student_name);
+    const students = [...studentMap.entries()].sort((a, b) => a[1].localeCompare(b[1]));
 
-  // Pivot por grupo
-  const statusLabel = (st: string) => st === "present" ? "P" : st === "absent" ? "A" : "T";
-  for (const [groupId, groupInfo] of groupMap.entries()) {
-    const gs = sessions.filter(s => s.group_id === groupId).sort((a, b) => a.date.localeCompare(b.date));
-    const studentNames = new Map<string, string>();
-    for (const s of gs) for (const r of s.records) studentNames.set(r.student_id, r.student_name);
-    const pivot: unknown[][] = [["Alumno", ...gs.map(s => s.date)]];
-    for (const [sid, sname] of [...studentNames.entries()].sort((a, b) => a[1].localeCompare(b[1]))) {
-      pivot.push([sname, ...gs.map(s => { const rec = s.records.find(r => r.student_id === sid); return rec ? statusLabel(rec.status) : "—"; })]);
+    const pivot: unknown[][] = [["Alumno", ...dates, "% Asistencia"]];
+    for (const [sid, sname] of students) {
+      let present = 0, total = 0;
+      const row: unknown[] = [sname];
+      for (const s of g.sessions) {
+        const rec = s.records.find(r => r.student_id === sid);
+        if (rec) { total++; if (rec.status === "present") present++; row.push(statusES(rec.status)); }
+        else { row.push("—"); }
+      }
+      row.push(total > 0 ? `${Math.round((present / total) * 100)}%` : "—");
+      pivot.push(row);
     }
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(pivot), makeSheetName(groupInfo.name, usedNames));
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(pivot), makeSheetName(g.name, usedNames));
   }
-
-  // Datos brutos
-  const raw: unknown[][] = [["Fecha", "Grupo", "Alumno", "Estado"]];
-  const statusES = (st: string) => st === "present" ? "Presente" : st === "absent" ? "Ausente" : "Tarde";
-  for (const s of [...sessions].sort((a, b) => a.date.localeCompare(b.date) || a.group_name.localeCompare(b.group_name))) {
-    for (const r of [...s.records].sort((a, b) => a.student_name.localeCompare(b.student_name))) {
-      raw.push([s.date, s.group_name, r.student_name, statusES(r.status)]);
-    }
-  }
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(raw), makeSheetName("Datos brutos", usedNames));
 
   XLSX.writeFile(wb, `informe-asistencia-${label}.xlsx`);
 }
