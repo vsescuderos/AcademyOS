@@ -9,11 +9,35 @@ const TEMPLATE_PATH = path.join(
   "informe-asistencia.xlsx"
 );
 
+const LOGO_PATH = path.join(process.cwd(), "public", "logo.PNG");
+const CM_TO_PX = 96 / 2.54; // 96 DPI — ExcelJS ext uses pixels
+
 const STATUS_ES: Record<string, string> = {
   present: "Presente",
   absent: "Ausente",
   late: "Tarde",
 };
+
+function addLogo(ws: ExcelJS.Worksheet, logoId: number) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (ws as any)._images = [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  ws.addImage(logoId, {
+    tl: { col: 0, row: 0 },
+    ext: { width: Math.round(8.83 * CM_TO_PX), height: Math.round(2.1 * CM_TO_PX) },
+    editAs: "oneCell",
+  } as any);
+}
+
+function colLetter(col: number): string {
+  let s = "";
+  while (col > 0) {
+    const r = (col - 1) % 26;
+    s = String.fromCharCode(65 + r) + s;
+    col = Math.floor((col - 1) / 26);
+  }
+  return s;
+}
 
 function makeSheetName(base: string, used: Set<string>): string {
   let name = base.slice(0, 31);
@@ -103,10 +127,6 @@ function cloneWorksheet(
     try { dest.mergeCells(range); } catch { /* skip on conflict */ }
   }
 
-  // Images (logo): same imageId references the same media in the workbook
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  src.getImages().forEach((img: any) => dest.addImage(img.imageId, img.range));
-
   return dest;
 }
 
@@ -130,10 +150,16 @@ function fillSheet(
   const firstDataRowNum = hRowNum + 1;
   const templateDataCount = countTemplateDataRows(ws, hRowNum, startCol);
 
-  // ── Header row: update values only (styles already in template) ─────────────
+  // ── Header row: value + formatting (bold, no underline, bottom border) ───────
   const hRow = ws.getRow(hRowNum);
   for (let ci = 0; ci < header.length; ci++) {
-    hRow.getCell(startCol + ci).value = header[ci];
+    const cell = hRow.getCell(startCol + ci);
+    cell.value = header[ci];
+    cell.font = { ...(cell.font ?? {}), bold: true, underline: false };
+    cell.border = {
+      ...(cell.border ?? {}),
+      bottom: { style: "thin", color: { argb: "FF000000" } },
+    };
   }
   // Clear any extra template header cells to the right of our header
   for (let c = startCol + header.length; ; c++) {
@@ -142,6 +168,9 @@ function fillSheet(
     cell.value = null;
   }
   hRow.commit();
+
+  // Autofilter spanning the full header
+  ws.autoFilter = `${colLetter(startCol)}${hRowNum}:${colLetter(startCol + header.length - 1)}${hRowNum}`;
 
   // Reference row: first template data row — style/width source for extras
   const refRow = ws.getRow(firstDataRowNum);
@@ -182,14 +211,6 @@ function fillSheet(
     row.commit();
   }
 
-  // ── Column widths for extra date columns (always at startCol+ i.e. ≥ E) ─────
-  if (refColCount > 0 && header.length > refColCount) {
-    // Use the width of the last template date column as the default
-    const extraWidth = ws.getColumn(startCol + refColCount - 1).width ?? 12;
-    for (let ci = refColCount; ci < header.length; ci++) {
-      ws.getColumn(startCol + ci).width = extraWidth;
-    }
-  }
 }
 
 export async function generateAttendanceExcel(
@@ -197,6 +218,8 @@ export async function generateAttendanceExcel(
 ): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.readFile(TEMPLATE_PATH);
+
+  const logoId = wb.addImage({ filename: LOGO_PATH, extension: "png" });
 
   // Group sessions by group, sorted by date
   const groupMap = new Map<string, { name: string; sessions: ReportSession[] }>();
@@ -223,6 +246,7 @@ export async function generateAttendanceExcel(
       ]);
     }
     fillSheet(inicioWs, ["Grupo", "Sesiones totales", "% Asistencia"], inicioRows);
+    addLogo(inicioWs, logoId);
   }
 
   // Keep a reference to the group template sheet BEFORE removing it from the workbook
@@ -269,12 +293,30 @@ export async function generateAttendanceExcel(
     const sheetName = makeSheetName(g.name, usedNames);
     const groupWs = cloneWorksheet(wb, groupTemplateWs!, sheetName);
 
-    fillSheet(groupWs, ["Alumno", "% Asistencia", ...dates], dataRows);
+    const header = ["Alumno", "% Asistencia", ...dates];
+    fillSheet(groupWs, header, dataRows);
+    addLogo(groupWs, logoId);
 
-    // A11: group title — update value only, template format is preserved by clone
-    const titleRow = groupWs.getRow(11);
-    titleRow.getCell(1).value = `Asistencia de ${g.name}`;
-    titleRow.commit();
+    // Auto-fit date columns (F onwards, ci >= 2 relative to startCol)
+    const headerPos = findHeader(groupWs);
+    if (headerPos) {
+      for (let ci = 2; ci < header.length; ci++) {
+        let maxLen = header[ci].length;
+        for (const row of dataRows) {
+          const val = row[ci];
+          if (val != null) maxLen = Math.max(maxLen, String(val).length);
+        }
+        groupWs.getColumn(headerPos.colNum + ci).width = maxLen + 3;
+      }
+    }
+
+    // A11:E11 — merge & center, set title
+    try { groupWs.unMergeCells(11, 1, 11, 5); } catch { /* not merged yet */ }
+    groupWs.mergeCells(11, 1, 11, 5);
+    const titleCell = groupWs.getRow(11).getCell(1);
+    titleCell.value = `Asistencia de ${g.name}`;
+    titleCell.alignment = { horizontal: "center", vertical: "middle" };
+    groupWs.getRow(11).commit();
   }
 
   const buffer = await wb.xlsx.writeBuffer();

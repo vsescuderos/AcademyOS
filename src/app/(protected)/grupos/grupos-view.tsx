@@ -314,8 +314,8 @@ function GroupRow({ group, profesores, students, expanded, isLast, onToggle, onR
             <span key={d.key} style={{
               width: 20, height: 20, borderRadius: "50%", fontSize: 10, fontWeight: 600,
               display: "flex", alignItems: "center", justifyContent: "center",
-              background: group.days.includes(d.key) ? (expanded ? "var(--accent)" : "var(--accent-light)") : "transparent",
-              color: group.days.includes(d.key) ? (expanded ? "#fff" : "var(--accent)") : "transparent",
+              background: group.days.includes(d.key) ? (expanded ? "var(--accent)" : "var(--accent-light)") : "var(--bg2)",
+              color: group.days.includes(d.key) ? (expanded ? "#fff" : "var(--accent)") : "var(--t3)",
             }}>{d.short}</span>
           ))}
         </div>

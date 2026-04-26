@@ -48,7 +48,14 @@
       "Read(//tmp/**)",
       "Bash(git -C \"c:/Users/valen/Documents/Claude/AcademyOS_v2\" diff --stat HEAD)",
       "Bash(git -C \"c:/Users/valen/Documents/Claude/AcademyOS_v2\" diff .claude/settings.json)",
-      "Bash(git -C \"c:/Users/valen/Documents/Claude/AcademyOS_v2\" add src/actions/director.ts \"src/app/\\(protected\\)/profesores/profesores-view.tsx\" \"src/app/\\(protected\\)/profesores/page.tsx\" \"src/app/\\(protected\\)/profesores/excel-import-profesores.tsx\" supabase/migrations/20260420000012_attendance_sessions_created_by_nullable.sql .claude/settings.json)"
+      "Bash(git -C \"c:/Users/valen/Documents/Claude/AcademyOS_v2\" add src/actions/director.ts \"src/app/\\(protected\\)/profesores/profesores-view.tsx\" \"src/app/\\(protected\\)/profesores/page.tsx\" \"src/app/\\(protected\\)/profesores/excel-import-profesores.tsx\" supabase/migrations/20260420000012_attendance_sessions_created_by_nullable.sql .claude/settings.json)",
+      "Bash(git -C c:/Users/valen/Documents/Claude/AcademyOS_v2 commit -m ' *)",
+      "Bash(git -C \"c:/Users/valen/Documents/Claude/AcademyOS_v2\" add \"src/app/\\(protected\\)/alumnos/alumnos-view.tsx\")",
+      "Bash(git -C \"c:/Users/valen/Documents/Claude/AcademyOS_v2\" push origin main)",
+      "Bash(git -C \"c:/Users/valen/Documents/Claude/AcademyOS_v2\" status --short)",
+      "Bash(curl -s https://vuadltabegeldekxzjsb.supabase.co/rest/v1/rpc/exec -H 'apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ1YWRsdGFiZWdlbGRla3h6anNiIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NjY4NDI2NywiZXhwIjoyMDkyMjYwMjY3fQ.enk2yNtdnuadSvBot4PgSZHWrWsAapOF4CCnfL4J_20' -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ1YWRsdGFiZWdlbGRla3h6anNiIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NjY4NDI2NywiZXhwIjoyMDkyMjYwMjY3fQ.enk2yNtdnuadSvBot4PgSZHWrWsAapOF4CCnfL4J_20' -H 'Content-Type: application/json' -d '{\"sql\":\"SELECT is_nullable FROM information_schema.columns WHERE table_name='\\\\''attendance_sessions'\\\\'' AND column_name='\\\\''created_by'\\\\''\"}')",
+      "Bash(node -e ' *)",
+      "Bash(node \"Plantillas de Informes/generar-plantilla.js\")"
     ]
   }
 }
