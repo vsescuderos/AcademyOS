@@ -1,5 +1,3 @@
-import path from "path";
-import fs from "fs";
 import PDFDocument from "pdfkit";
 
 export interface ReceiptData {
@@ -47,15 +45,8 @@ export async function generateReceiptPdf(data: ReceiptData): Promise<Buffer> {
     // ── Header (green band, 78 pt) ─────────────────────────────────────────
     doc.rect(0, 0, W, 78).fill(accent);
 
-    // Logo in white box
-    const logoPath = path.join(process.cwd(), "public", "logo.PNG");
-    if (fs.existsSync(logoPath)) {
-      doc.rect(PAD - 4, 12, 100, 54).fill("#ffffff");
-      doc.image(logoPath, PAD - 2, 18, { fit: [96, 42] });
-    }
-
     // Academy info
-    const infoX = PAD + 108;
+    const infoX = PAD;
     doc.fillColor("#ffffff").fontSize(14).font("Helvetica-Bold")
       .text(data.academyName, infoX, 20, { width: W - infoX - 110, lineBreak: false });
     if (data.academyPhone) {
